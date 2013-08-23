@@ -57,13 +57,19 @@ sequential read and write results.
 For larger numbers of disks there is a summIOzone.sh script that can help
 provide a summary of disk-test.sh output.
 
-Post install tests are TestDFSIO and TeraSort.  Scripts to run each
-are provided in the post-install folder.  Read the scripts for
-additional info.  A script to create a benchmarks volume (mkBMvol.sh)
-is provided as well as a script to generate the terabyte of data,
-runTeraGen.sh.  runTeraSort.sh needs to be tuned to each specific
-cluster.  Experiment with the -D options as needed.  There is also
-a mapr-audit.sh script which can be run to provide an audit snapshot
-of the MapR configuration.  The script is also a useful set of
-example maprcli commands.
+When all three subsystem tests have passed and met expectations,
+there is an example install script in the pre-install folder that
+can be modified and used for a scripted install.  This script assumes
+the yum repos are configured and ready to go.  Read the script
+carefully to understand how a simple scripted install works.  The
+script MUST be modified to work in an actual cluster deployment.
 
+Post install tests are RWSpeedTest, TestDFSIO and TeraSort.  Scripts
+to run each are provided in the post-install folder.  Read the
+scripts for additional info.  A script to create a benchmarks volume
+(mkBMvol.sh) is provided as well as a script to generate the terabyte
+of data, runTeraGen.sh.  runTeraSort.sh needs to be tuned to each
+specific cluster.  Experiment with the -D options as needed.
+There is also a mapr-audit.sh script which can be run to provide
+an audit snapshot of the MapR configuration.  The script is a
+useful set of example maprcli commands.

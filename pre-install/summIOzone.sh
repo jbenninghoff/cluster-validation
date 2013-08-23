@@ -1,8 +1,6 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2012-Aug-31  vi: set ai et sw=3 tabstop=3:
 # script which summarizes iozone results on a set of disks
-# iozone results must be concatenated to a single log file like this:
-# cat sd*iozone.log > tmp.log; ./summIOzone.sh tmp.log
+# iozone results presummed to be in current folder in .log files
 
 cat sd*iozone.log | gawk '
    BEGIN {
@@ -77,4 +75,4 @@ cat sd*iozone.log | gawk '
      printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / rravg)
    }
 '
-
+# jbenninghoff@maprtech.com 2012-Aug-31  vim: set ai et sw=3 tabstop=3: 

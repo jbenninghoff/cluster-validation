@@ -38,7 +38,7 @@ psh $parg "grep '^model name' /proc/cpuinfo | sort -u" | dshbak -c
 #echo $sep
 #psh $parg "$abspath/id_cpu_x64 -L | grep -e ' bus freq=' -e 'microcode signature=' -e 'DPL (Stride)' -e 'L2 Streamer' -e 'DCU prefetcher' -e 'Sticky thermal status=' -e 'Stepping' -e 'This system has' -e prefetch | uniq -s 6" | dshbak -c
 echo $sep
-psh $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)'" | dshbak -c
+psh $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' | awk '/^ CPU MHz:/{sub(\$3,sprintf(\"%0.0f\",\$3))};{print}'" | dshbak -c
 echo $sep
 # probe for nic info ###############
 #psh $parg "ifconfig | grep -A1 \^eth | fmt" | dshbak -c
@@ -79,7 +79,8 @@ psh $parg "echo -n 'CPUspeed Service: '; service cpuspeed status" |dshbak -c
 psh $parg "echo -n 'CPUspeed Service: '; chkconfig --list cpuspeed" |dshbak -c
 #psh $parg "echo -n 'Frequency Governor: '; for dev in /sys/devices/system/cpu/cpu[0-9]*; do cat \$dev/cpufreq/scaling_governor; done | uniq -c" | dshbak -c
 echo $sep
-psh $parg "echo Check Permissions; ls -ld / /tmp | awk '{print \$1,\$3,\$4,\$9}'" | dshbak -c; echo $sep
+#psh $parg "echo Check Permissions; ls -ld / /tmp | awk '{print \$1,\$3,\$4,\$9}'" | dshbak -c; echo $sep
+psh $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" | dshbak -c; echo $sep
 psh $parg 'java -version; echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}' |& dshbak -c; echo $sep
 echo Hostname lookup
 psh $parg 'hostname -I'; echo $sep
