@@ -82,6 +82,7 @@ echo $sep
 #psh $parg "echo Check Permissions; ls -ld / /tmp | awk '{print \$1,\$3,\$4,\$9}'" | dshbak -c; echo $sep
 psh $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" | dshbak -c; echo $sep
 psh $parg 'java -version; echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}' |& dshbak -c; echo $sep
+psh $parg 'java -XX:+PrintFlagsFinal -version |& grep MaxHeapSize' |& dshbak -c; echo $sep
 echo Hostname lookup
 psh $parg 'hostname -I'; echo $sep
 #psh $parg 'echo Hostname lookup; hostname -i; hostname -f' | dshbak -c; echo $sep

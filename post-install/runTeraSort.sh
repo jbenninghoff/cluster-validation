@@ -27,6 +27,7 @@ head -22 $logname
 
 : << '--BLOCK-COMMENT--'
 # options used in world record terasort run on large cluster:
+# buffer.percent triggers bug in MapR
 -Dmapred.job.reduce.input.buffer.percent=1.0 \
 -Dmapred.maxthreads.generate.mapoutput=6 \
 -Dmapred.maxthreads.partition.closer=6 \
