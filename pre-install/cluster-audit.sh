@@ -1,7 +1,7 @@
 #!/bin/bash
 # A sequence of parallel shell commands looking for system configuration
 # differences between all the nodes in a cluster
-# Requires a parallel shell such as clush or pdsh
+# Requires a parallel shell (clush)
 shopt -s expand_aliases
 
 sep='====================================================================='
@@ -46,6 +46,7 @@ echo $sep
 #psh $parg "ifconfig | awk '/^[^ ]/ && \$1 !~ /lo/{print \$1}' | xargs -l ethtool | grep -e ^Settings -e Speed" | dshbak -c
 psh $parg "lspci | grep -i ether" | dshbak -c
 psh $parg "ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l ethtool | grep -e ^Settings -e Speed" | dshbak -c
+psh $parg "echo -n 'Nic Speed: '; ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l -I % cat /sys/class/net/%/speed"  | dshbak -c
 echo $sep
 # probe for disk info ###############
 psh $parg "echo 'Storage Controller: '; lspci | grep -i -e raid -e storage -e lsi" | dshbak -c
@@ -64,21 +65,36 @@ psh $parg "uname -srvm | fmt" | dshbak -c
 echo $sep
 psh $parg date | dshbak -c
 echo $sep
-psh $parg "ntpstat | head -1" | dshbak -c
-echo $sep
-psh $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config" | dshbak -c
-echo $sep
-psh $parg "chkconfig --list iptables" | dshbak -c
-echo $sep
-psh $parg "service iptables status | head -10" | dshbak -c
-echo $sep
+
+distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e centos)
+shopt -s nocasematch
+case $distro in
+   ubuntu)
+      # Ubuntu SElinux tools not so good.
+      psh $parg "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled" | dshbak -c; echo $sep
+      psh $parg "echo 'Firewall status: '; service ufw status | head -10" | dshbak -c; echo $sep
+      psh $parg 'echo "NTP status "; service ntp status' | dshbak -c ; echo $sep
+      psh $parg "echo 'NFS packages installed '; dpkg-query -W -f='${PackageSpec} ${Version}\t${Maintainer}\n' | grep -i nfs" | dshbak -c ; echo $sep
+   ;;
+   redhat|centos)
+      psh $parg "ntpstat | head -1" | dshbak -c; echo $sep
+      psh $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config" | dshbak -c; echo $sep
+      psh $parg "chkconfig --list iptables" | dshbak -c; echo $sep
+      #psh $parg "service iptables status | grep -m 3 -e ^Table -e ^Chain" | dshbak -c
+      psh $parg "service iptables status | head -10" | dshbak -c; echo $sep
+      #psh $parg "echo -n 'Frequency Governor: '; for dev in /sys/devices/system/cpu/cpu[0-9]*; do cat \$dev/cpufreq/scaling_governor; done | uniq -c" | dshbak -c
+      psh $parg "echo -n 'CPUspeed Service: '; service cpuspeed status" |dshbak -c
+      psh $parg "echo -n 'CPUspeed Service: '; chkconfig --list cpuspeed" |dshbak -c
+      echo $sep
+      psh $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' | dshbak -c; echo $sep
+      psh $parg 'echo Missing RPMs: ; for each in make patch redhat-lsb irqbalance syslinux hdparm sdparm dmidecode nc; do rpm -q $each | grep "is not installed"; done' | dshbak -c; echo $sep
+   ;;
+   *) echo Unknown Linux distro!; exit ;;
+esac
+shopt -u nocasematch
+
 #psh $parg "grep AUTOCONF /etc/sysconfig/network" | dshbak -c; echo $sep
 psh $parg "echo -n 'Transparent Huge Pages: '; cat $enpath" | dshbak -c
-echo $sep
-psh $parg "echo -n 'CPUspeed Service: '; service cpuspeed status" |dshbak -c
-psh $parg "echo -n 'CPUspeed Service: '; chkconfig --list cpuspeed" |dshbak -c
-#psh $parg "echo -n 'Frequency Governor: '; for dev in /sys/devices/system/cpu/cpu[0-9]*; do cat \$dev/cpufreq/scaling_governor; done | uniq -c" | dshbak -c
-echo $sep
 #psh $parg "echo Check Permissions; ls -ld / /tmp | awk '{print \$1,\$3,\$4,\$9}'" | dshbak -c; echo $sep
 psh $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" | dshbak -c; echo $sep
 psh $parg 'java -version; echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}' |& dshbak -c; echo $sep
@@ -86,15 +102,11 @@ psh $parg 'java -XX:+PrintFlagsFinal -version |& grep MaxHeapSize' |& dshbak -c;
 echo Hostname lookup
 psh $parg 'hostname -I'; echo $sep
 #psh $parg 'echo Hostname lookup; hostname -i; hostname -f' | dshbak -c; echo $sep
-psh $parg 'rpm -qa | grep -i nfs |sort' | dshbak -c; echo $sep
-psh $parg 'echo Missing RPMs: ; for each in make patch redhat-lsb irqbalance syslinux hdparm sdparm dmidecode nc; do rpm -q $each | grep "is not installed"; done' | dshbak -c; echo $sep
 psh $parg "ls -d /opt/mapr/* | head" | dshbak -c; echo $sep
 psh $parg 'echo -n "Open file limit(should be >32K): "; ulimit -n' | dshbak -c; echo $sep
 psh $parg 'echo "mapr login for Hadoop "; getent passwd mapr && { echo ~mapr/.ssh; ls ~mapr/.ssh; }' | dshbak -c
 echo $sep
 psh $parg 'echo "Root login "; getent passwd root && { echo ~root/.ssh; ls ~root/.ssh; }' | dshbak -c; echo $sep
-
-
 exit
 
 if type -t lscpu > /dev/null; then
