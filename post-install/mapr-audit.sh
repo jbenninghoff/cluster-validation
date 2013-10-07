@@ -32,6 +32,8 @@ $node maprcli alarm list -json
 
 echo $sep
 $node maprcli node list -columns hostname,svc
+echo zookeepers:
+maprcli node listzookeepers
 
 echo $sep
 $node maprcli node list -columns hostname,cpus,ttmapSlots,ttReduceSlots

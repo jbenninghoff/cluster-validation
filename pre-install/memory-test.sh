@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # jbenning@cisco.com 2012-Jan-19  vi: set ai et sw=3 tabstop=3:
 # Run Stream benchmark or mem latency benchmark
 
