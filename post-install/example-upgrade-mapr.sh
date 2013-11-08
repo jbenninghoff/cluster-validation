@@ -23,8 +23,8 @@ clush -a -B service mapr-zookeeper start
 clush -a -B service mapr-warden start
 clush -aB /opt/mapr/server/upgrade2mapruser.sh
 sleep 9; clush -a -B mount /mapr
+maprcli config save -values {"cldb.v3.features.enabled":"1"}  # This can be done later if needed
 maprcli config save -values {mapr.targetversion:"$(</opt/mapr/MapRBuildVersion)"}  # This can be done through MCS also
-maprcli config save -values {"cldb.v3.features.enabled":"1"}
 
 # If CLDB has problems restarting or MapR FS needs rebuilding
 #maprcli config save -values {"cldb.ignore.stale.zk":"true"}

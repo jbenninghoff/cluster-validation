@@ -16,10 +16,15 @@ working order and ready to hand over to production.
 
 Install clush (rpm provided, also available via EPEL) on a machine
 with passwordless ssh to all other cluster nodes.  Update the file
-/etc/clushtershell/groups to include an entry for "all" matching a
+/etc/clustershell/groups to include an entry for "all" matching a
 pattern or patterns of host names.  For example, "all: node[0-10]".
 Verify clush works correctly by running "clush -a date".  Compare
 results with "clush -ab date".
+
+Download and extract the cluster-validation package with a command like this:
+curl -LO 'https://github.com/jbenninghoff/cluster-validation/archive/master.zip'
+Extract with unzip master.zip and move the pre-install and post-install folder
+directly under /root for simplicity.
 
 Copy the /root/pre-install folder to all nodes in the cluster via
 clush.  For example, run:
@@ -71,12 +76,22 @@ the yum repos are configured and ready to go.  Read the script
 carefully to understand how a simple scripted install works.  The
 script MUST be modified to work in an actual cluster deployment.
 
-Post install tests are RWSpeedTest, TestDFSIO and TeraSort.  Scripts
-to run each are provided in the post-install folder.  Read the
-scripts for additional info.  A script to create a benchmarks volume
+Post install tests are in the post-install folder.  The primary tests are
+RWSpeedTest and TeraSort.  Scripts
+to run each are provided in the folder.  Read the
+scripts for additional info.  
+A script to create a benchmarks volume
 (mkBMvol.sh) is provided as well as a script to generate the terabyte
-of data, runTeraGen.sh.  runTeraSort.sh needs to be tuned to each
+of data, runTeraGen.sh.  Be sure to create the benchmarks volume before
+running any of the post install benchmarks.
+runTeraSort.sh needs to be tuned to each
 specific cluster.  Experiment with the -D options as needed.
+
 There is also a mapr-audit.sh script which can be run to provide
 an audit snapshot of the MapR configuration.  The script is a
-useful set of example maprcli commands.
+useful set of example maprcli commands. There are also example install,
+upgrade and uninstall scripts.  None of those will run without editing, so
+read the scripts carefully to understand how to edit them with site specific
+info.
+
+/John Benninghoff
