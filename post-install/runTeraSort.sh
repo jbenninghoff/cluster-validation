@@ -8,8 +8,6 @@ nodes=$(maprcli node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{i
 hadoop fs -rmr /benchmarks/tera/run1
 hadoop jar /opt/mapr/hadoop/hadoop-0.20.2/hadoop-0.20.2-dev-examples.jar terasort \
 -Dmapred.reduce.tasks=$rtasks \
--Dmapred.reduce.child.java.opts="-Xmx3000m" \
--Dmapred.job.shuffle.input.buffer.percent=0.7 \
 /benchmarks/tera/in /benchmarks/tera/run1
 
 # Capture the job history log
