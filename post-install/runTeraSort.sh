@@ -3,17 +3,11 @@
 
 nodes=$(maprcli node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{if ($2>1) count++};END{print count}')
 ((rtasks=nodes*2)) # 2 reduce tasks per node, reduce tasks per node limited by available RAM
-#1TB requires 334 reduce tasks using 3GB heap, 250 reduce tasks using 4GB heap
 
 # TeraSort
 hadoop fs -rmr /benchmarks/tera/run1
 hadoop jar /opt/mapr/hadoop/hadoop-0.20.2/hadoop-0.20.2-dev-examples.jar terasort \
 -Dmapred.reduce.tasks=$rtasks \
--Dmapred.map.tasks.speculative.execution=false \
--Dmapred.reduce.tasks.speculative.execution=false \
--Dio.sort.mb=380 \
--Dmapred.map.child.java.opts="-Xmx1000m" \
--Dmapred.reduce.child.java.opts="-Xmx3000m" \
 /benchmarks/tera/in /benchmarks/tera/run1
 
 logname=terasort-run1-$(date -Imin|cut -c-16).log
@@ -24,6 +18,12 @@ head -22 $logname  # show the top of the log with elapsed time, etc
 # hadoop jar /opt/mapr/hadoop/hadoop-0.20.2/hadoop-0.20.2-dev-examples.jar teravalidate /benchmarks/tera/run1 /benchmarks/tera/run1validate
 
 : << '--BLOCK-COMMENT--'
+-Dmapred.map.tasks.speculative.execution=false \
+-Dmapred.reduce.tasks.speculative.execution=false \
+-Dio.sort.mb=380 \
+-Dmapred.map.child.java.opts="-Xmx1000m" \
+-Dmapred.reduce.child.java.opts="-Xmx3000m" \
+#1TB requires 334 reduce tasks using 3GB heap, 250 reduce tasks using 4GB heap
 # Experimental options below, use if you know what you are doing
 # slowstart setting controls overlap of reduce tasks with map tasks
 -Dmapred.reduce.slowstart.completed.maps=0 \
