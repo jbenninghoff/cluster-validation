@@ -1,7 +1,12 @@
 #!/bin/bash
 # jbenninghoff@maprtech.com 2013-Sep-19  vi: set ai et sw=3 tabstop=3:
 
-clush -a -B umount /mapr
+# stop centralconfig?
+# stop ingest
+# stop oozie
+#check machines for NFS mounts with 'netstat -an | grep 2049'
+#on all NFS client machines found, run lsof /mntpoint and/or fuser -c /mntpoint; kill all procs using NFS
+clush -a -B umount -lf /mapr
 clush -a -B service mapr-warden stop
 clush -a -B service mapr-zookeeper stop
 clush -a -B jps; clush -a -B 'ps ax | grep mapr'
@@ -10,14 +15,15 @@ sleep 9
 clush -a -B jps; clush -a -B 'ps ax | grep mapr'
 
 # Edit the url for version and edit the path to the yum repo file as needed
-sed -i '/baseurl=.*package.mapr.com/{s,^.*$,baseurl=http://package.mapr.com/releases/v3.0.1/redhat,;q}' /etc/yum.repos.d/mapr.repo
+sed -i '0,/baseurl=.*package.mapr.com.*/{s,,baseurl=http://package.mapr.com/releases/v3.0.2/redhat,}' /etc/yum.repos.d/mapr.repo
 [ $? != 0 ] && { echo "/etc/yum.repos.d/mapr.repo not found or needs hand edit"; exit; }
 clush -abc /etc/yum.repos.d/mapr.repo  # Copy the edited mapr.repo file to all the nodes
 clush -ab yum clean all
 
 #yum --disablerepo=maprecosystem check-update mapr-\* | grep ^mapr #If you want to preview the updates
-clush -ab 'yum -y --disablerepo=maprecosystem update mapr-\*'
-clush -ab '/opt/mapr/server/configure.sh -R -u mapr -g mapr' # assuming MapR to be run as mapr user.  Update seems to reset MapR user to root
+clush -ab 'sudo yum -y --disablerepo=maprecosystem update mapr-\*' |& tee mapr-main-updates.log
+clush -ab 'sudo yum -y --disablerepo=mapr update mapr-\*' |& tee mapr-eco-updates.log
+clush -ab '/opt/mapr/server/configure.sh -R -u mapr -g mapr -d hostname:3306 -du mapr -dp whatever' # assuming MapR to be run as mapr user.  Update seems to reset MapR user to root
 
 clush -a -B service mapr-zookeeper start
 clush -a -B service mapr-warden start

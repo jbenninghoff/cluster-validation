@@ -5,12 +5,26 @@
 # A sequence of maprcli commands to probe installed system configuration
 # Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
 
+verbose=false
 while getopts ":v" opt; do
   case $opt in
     v) verbose=true ;;
     \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
   esac
 done
+# set verbose to false, true or full
+# Use new bash case switch/fallthrough using ;& instead of ;;
+# case $verbose in
+#   false)
+#     date; echo $sep ...
+#     ;&
+#   true)
+#     maprcli ...
+#     ;&
+#   full)
+#     clush ...
+#     ;&
+# esac
 
 sep='====================================================================='
 D=$(dirname "$0"); abspath=$(cd "$D" 2>/dev/null && pwd || echo "$D")
@@ -19,7 +33,6 @@ shopt -s expand_aliases
 unalias psh 2>/dev/null; alias psh='clush -b'
 parg='-g mapr' # Assuming clush group 'mapr' is configured to reach all nodes
 parg='-a' # Assuming clush is configured to reach all nodes
-parg='-w hbase[2-29]'
 snode='ssh lgpbd1000' #Single node to run maprcli commands from
 snode='' #Set to null if current node can run maprcli commands as well as clush commands
 
