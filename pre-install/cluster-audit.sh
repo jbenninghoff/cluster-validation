@@ -8,17 +8,15 @@
 sep='====================================================================='
 D=$(dirname "$0")
 abspath=$(cd "$D" 2>/dev/null && pwd || echo "$D")
-eval enpath=$(echo /sys/kernel/mm/*transparent_hugepage/enabled) #needs improvement
+#eval enpath=$(echo /sys/kernel/mm/*transparent_hugepage/enabled) #needs improvement
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e centos)
 shopt -s nocasematch
 
 #parg="-a -x rhel11,rhel16"
-parg="-aB"
 parg="-g sen -B"
-parg="-B -w hbase[2-29]"
-parg2='-aB -o -qtt'
+parg="-aB"
 parg2='-g sen -B -o -qtt'
-parg2='-B -o -qtt -w hbase[2-29]'
+parg2='-aB -o -qtt'
 
 echo ==================== Hardware audits ================================
 date; echo $sep
@@ -93,7 +91,7 @@ esac
 shopt -u nocasematch
 
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
-clush $parg "echo -n 'Transparent Huge Pages: '; cat $enpath" 
+#clush $parg "echo -n 'Transparent Huge Pages: '; cat $enpath" 
 #clush $parg "echo Check Permissions; ls -ld / /tmp | awk '{print \$1,\$3,\$4,\$9}'" ; echo $sep
 clush $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" ; echo $sep
 clush $parg 'java -version; echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
