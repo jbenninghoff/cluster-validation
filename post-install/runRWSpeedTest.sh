@@ -10,9 +10,11 @@
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
 localvol=localvol-$(hostname -s)
 
+maprcli volume unmount -name $localvol
+maprcli volume remove -name $localvol
 # Make local volume
 maprcli volume create -name $localvol -path /$localvol -replication 1 -localvolumehost $(<$MAPR_HOME/hostname)
-hadoop mfs -setcompression off /localvol
+hadoop mfs -setcompression off /$localvol
 
 #find jars, there should only be one of these jars ... let's hope :)
 MFS_TEST_JAR=$(find $MAPR_HOME/lib -name maprfs-diagnostic-tools-\*.jar)
@@ -43,3 +45,5 @@ for i in $(seq 1 $ncpu); do
 done
 wait
 
+maprcli volume unmount -name $localvol
+maprcli volume remove -name $localvol
