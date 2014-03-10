@@ -8,8 +8,8 @@
 sep='====================================================================='
 D=$(dirname "$0")
 abspath=$(cd "$D" 2>/dev/null && pwd || echo "$D")
-#eval enpath=$(echo /sys/kernel/mm/*transparent_hugepage/enabled) #needs improvement
-distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e centos)
+eval enpath=$(echo /sys/kernel/mm/transparent_hugepage/enabled) #needs improvement
+distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos)
 shopt -s nocasematch
 
 #parg="-a -x rhel11,rhel16"
@@ -46,7 +46,7 @@ case $distro in
    ubuntu)
 	clush $parg2 "sudo fdisk -l | grep '^Disk /.*:'"; echo $sep
    ;;
-   redhat|centos)
+   redhat|centos|red*)
 	clush $parg "lsblk -id | awk '{print \$1,\$4}'|sort | nl"; echo $sep
    ;;
    *) echo Unknown Linux distro!; exit ;;
@@ -70,11 +70,11 @@ case $distro in
       clush $parg2 "sudo apparmor_status | sed 's/([0-9]*)//'"; echo $sep
       clush $parg "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo $sep
       clush $parg "echo 'Firewall status: '; service ufw status | head -10"; echo $sep
-      clush $parg "echo 'IPtables status: '; sudo iptables -L | head -10"; echo $sep
+      clush $parg2 "echo 'IPtables status: '; sudo iptables -L | head -10"; echo $sep
       clush $parg 'echo "NTP status "; service ntp status'; echo $sep
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
-   redhat|centos)
+   redhat|centos|red*)
       clush $parg "ntpstat | head -1" ; echo $sep
       clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config" ; echo $sep
       clush $parg "/sbin/chkconfig --list iptables" ; echo $sep
@@ -84,23 +84,20 @@ case $distro in
       clush $parg "echo -n 'CPUspeed Service: '; service cpuspeed status" 
       clush $parg "echo -n 'CPUspeed Service: '; /sbin/chkconfig --list cpuspeed"; echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
-      clush $parg 'echo Missing RPMs: ; for each in make patch redhat-lsb irqbalance syslinux hdparm sdparm dmidecode nc; do rpm -q $each | grep "is not installed"; done' ; echo $sep
+      clush $parg 'echo Missing RPMs: ; for each in make patch redhat-lsb irqbalance syslinux hdparm sdparm dmidecode nc rpcbind; do rpm -q $each | grep "is not installed"; done' ; echo $sep
    ;;
    *) echo Unknown Linux distro!; exit ;;
 esac
 shopt -u nocasematch
 
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
-#clush $parg "echo -n 'Transparent Huge Pages: '; cat $enpath" 
-#clush $parg "echo Check Permissions; ls -ld / /tmp | awk '{print \$1,\$3,\$4,\$9}'" ; echo $sep
+clush $parg "echo -n 'Transparent Huge Pages: '; cat $enpath" ; echo $sep
 clush $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" ; echo $sep
 clush $parg 'java -version; echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
 clush $parg 'java -XX:+PrintFlagsFinal -version |& grep MaxHeapSize'; echo $sep
 echo Hostname lookup
 clush $parg 'hostname -I'; echo $sep
-#clush $parg 'echo Hostname lookup; hostname -i; hostname -f' ; echo $sep
 clush $parg "ls -d /opt/mapr/* | head" ; echo $sep
-clush $parg 'echo -n "Open file limit(should be >32K): "; ulimit -n' ; echo $sep
-clush $parg 'echo "mapr login for Hadoop "; getent passwd mapr && { echo ~mapr/.ssh; ls ~mapr/.ssh; }' 
-echo $sep
-clush $parg 'echo "Root login "; getent passwd root && { sudo echo ~root/.ssh; sudo ls ~root/.ssh; }'; echo $sep
+clush $parg 'echo -n "Open file limit(should be >32K): "; su - mapr -c "ulimit -n"' ; echo $sep
+clush $parg 'echo "mapr login for Hadoop "; getent passwd mapr && { echo ~mapr/.ssh; ls ~mapr/.ssh; }'; echo $sep
+clush $parg2 'echo "Root login "; getent passwd root && { sudo echo ~root/.ssh; sudo ls ~root/.ssh; }'; echo $sep

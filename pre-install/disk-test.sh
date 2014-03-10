@@ -21,6 +21,9 @@ if (( diskqty > 48 )); then
 fi
 echo Scrutinize this list carefully!!; exit #Comment out exit after list is vetted
 
+#read-only dd test, possible even after MFS is in place
+#for i in $disks; do dd of=/dev/null if=/dev/$i iflag=direct bs=1M count=1000 & done; exit
+
 set -x
 for disk in $disks; do
    $abspath/iozone -I -r 1M -s 4G -i 0 -i 1 -i 2 -f /dev/$disk > $disk-iozone.log&

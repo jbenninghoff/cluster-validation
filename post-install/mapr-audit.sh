@@ -52,7 +52,8 @@ $node maprcli node list -columns hostname,cpus,ttmapSlots,ttReduceSlots; echo $s
 echo MapR Volumes
 $node maprcli volume list -columns numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
 echo MapR Storage Pools
-$node maprcli dump balancerinfo | sort -r; echo $sep
+psh $parg /opt/mapr/server/mrconfig sp list; echo $sep
+[ "$verbose" == "true" ] && $node maprcli dump balancerinfo | sort -r; echo $sep
 #$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
 
 psh $parg cat /opt/mapr/conf/env.sh
@@ -62,10 +63,9 @@ psh $parg grep centralconfig /opt/mapr/conf/warden.conf
 psh $parg grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh
 psh $parg 'maprcli disk list -output terse -system 0 -host $(hostname)'
 psh $parg 'ls /opt/mapr/roles'
-[ -n "$verbose" ] && psh $parg /opt/mapr/server/mrconfig sp list
-[ -n "$verbose" ] && psh $parg '/opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'
-[ -n "$verbose" ] && $node hadoop conf -dump | sort; echo $sep
-[ -n "$verbose" ] && $node maprcli config load -json; echo $sep
+[ "$verbose" == "true" ] && psh $parg '/opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'
+[ "$verbose" == "true" ] && $node hadoop conf -dump | sort; echo $sep
+[ "$verbose" == "true" ] && $node maprcli config load -json; echo $sep
 # TBD:
 # check all mapr-* packages installed
 # check all hadoop* packages installed
