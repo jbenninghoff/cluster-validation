@@ -19,6 +19,8 @@ exit
 # This must be done BEFORE MapR FS is installed and configured (configure.sh)
 #===================================================================
 cd /opt/MegaCli/
+#dsks=$(/opt/MegaCli/MegaCli64 -ldgetprop) #Should be some way to get LSI disk count
+dsks=40
 for i in `seq 1 40`;  do
     /opt/MegaCli/MegaCli64 -cfglddel -l$i -a0 # This is destructive to data on $i drives
 done
