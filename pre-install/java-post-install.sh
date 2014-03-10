@@ -1,7 +1,7 @@
 #!/bin/bash
 
 javapath=/usr/java/jdk1.7.0_51
-[ -d $javapath ] && { echo $javapath does not exist; exit 1; }
+[ -d $javapath ] || { echo $javapath does not exist; exit 1; }
 
 for item in java javac javaws jar jps javah; do
   alternatives --install /usr/bin/$item $item $javapath/bin/$item 9
