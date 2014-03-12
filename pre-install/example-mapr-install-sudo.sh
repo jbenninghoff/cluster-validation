@@ -36,7 +36,7 @@ echo Wait at least 90 seconds for system to initialize; sleep 90
 ssh -t mrs001 sudo maprcli acl edit -type cluster -user mapr:fc
 
 echo With a web browser, open this URL to continue with license installation:
-echo 'https://mrs003:8443/'
+echo 'https://mrs001:8443/'
 
 #echo
 #echo Start mapr-warden on all remaining servers once the license is applied

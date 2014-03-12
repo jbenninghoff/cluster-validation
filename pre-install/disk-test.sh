@@ -11,6 +11,9 @@ EOF
 D=$(dirname "$0")
 abspath=$(cd "$D" 2>/dev/null && pwd || echo "$D")
 
+echo
+echo Run this clush command to identify all devices that are mounted per node
+echo clush -ab 'lsblk -l | awk "NF>=7{print}"'
 # run iozone with -h option for usage
 # Set list of device names for the 'for' loop
 disks=$(lsblk -id | grep -o ^sd. | grep -v ^sda |sort); echo $disks
