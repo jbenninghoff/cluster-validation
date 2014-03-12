@@ -27,6 +27,7 @@ clush -B -g zkcldb 'yum -y install mapr-zookeeper' #3 Zookeeper nodes, fileserve
 
 # Configure ALL nodes with CLDB and Zookeeper info (-N does not like spaces in the name)
 clush -B -a "/opt/mapr/server/configure.sh -N MyCluster -Z $(nodeset -S, -e @zkcldb) -C $(nodeset -S, -e @zkcldb) -u mapr -g mapr"
+[ $? -ne 0 ] && {echo configure.sh failed, check screen for errors; exit 1}
 
 # Identify and format the data disks for MapR
 clush -B -a "lsblk -id | grep -o ^sd. | grep -v ^sda |sort|sed 's,^,/dev/,' | tee /tmp/disk.list; wc /tmp/disk.list"
