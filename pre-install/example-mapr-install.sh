@@ -26,7 +26,7 @@ clush -B -g zkcldb 'yum -y install mapr-zookeeper' #3 Zookeeper nodes, fileserve
 #clush -B -w host1,host2,host3,host4,host5,host6,host7,host8 'yum -y erase mapr-tasktracker'
 
 # Configure ALL nodes with CLDB and Zookeeper info (-N does not like spaces in the name)
-clush -B -a '/opt/mapr/server/configure.sh -N MyCluster -Z $(nodeset -S, -e @zkcldb) -C $(nodeset -S, -e @zkcldb) -u mapr -g mapr'
+clush -B -a "/opt/mapr/server/configure.sh -N MyCluster -Z $(nodeset -S, -e @zkcldb) -C $(nodeset -S, -e @zkcldb) -u mapr -g mapr"
 
 # Identify and format the data disks for MapR
 clush -B -a "lsblk -id | grep -o ^sd. | grep -v ^sda |sort|sed 's,^,/dev/,' | tee /tmp/disk.list; wc /tmp/disk.list"
@@ -34,7 +34,7 @@ clush -B -a '/opt/mapr/server/disksetup -F /tmp/disk.list'
 #clush -B -a '/opt/mapr/server/disksetup -W $(cat /tmp/disk.list | wc -l) -F /tmp/disk.list' #Fast but less resilient storage
 
 # Check for correct java version and set JAVA_HOME
-clush -ab -o -qtt 'sudo sed -i "s/^#export JAVA_HOME=/export JAVA_HOME=\/usr\/java\/jdk1.7.0_51/" /opt/mapr/conf/env.sh'
+clush -ab -o -qtt 'sudo sed -i "s,^#export JAVA_HOME=,export JAVA_HOME=/usr/java/jdk1.7.0_51," /opt/mapr/conf/env.sh'
 
 clush -B -g zkcldb service mapr-zookeeper start; sleep 10
 ssh host3 service mapr-warden start  # Start 1 CLDB and webserver
