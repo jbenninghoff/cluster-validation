@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#hadoop fs -ls /user/guest
+hadoop fs -ls 
 #maprcli node cldbmaster # only works if mapr-core was installed
 
 cat - > /tmp/sample-table.txt <<EOF1
@@ -10,10 +10,11 @@ cat - > /tmp/sample-table.txt <<EOF1
 EOF1
 
 hive <<EOF2
+set hive.cli.print.header=true;
 DROP TABLE web_log;
 CREATE TABLE web_log(viewTime INT, userid BIGINT, url STRING, referrer STRING, ip STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
 LOAD DATA LOCAL INPATH '/tmp/sample-table.txt' INTO TABLE web_log;
-SELECT web_log.* FROM web_log;
+SELECT * FROM web_log;
 SELECT web_log.* FROM web_log WHERE web_log.url LIKE '%doc';
 quit;
 EOF2

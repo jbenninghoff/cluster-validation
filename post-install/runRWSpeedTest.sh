@@ -19,14 +19,15 @@ hadoop mfs -setcompression off /$localvol
 #find jars, there should only be one of these jars ... let's hope :)
 MFS_TEST_JAR=$(find $MAPR_HOME/lib -name maprfs-diagnostic-tools-\*.jar)
 
-# Find the total number of cores and use half of them
-ncpu=$(grep -c ^processor /proc/cpuinfo)
-((ncpu=ncpu/2))
+# Set number of Java processes to use equal to half the number of cores
+nproc=$(grep -c ^processor /proc/cpuinfo)
+((nproc=nproc/2))
+#TBD Try setting number of Java processes to number of data drives
 
 # Find the available MapR disk space on this node
 fsize=$(/opt/mapr/server/mrconfig sp list | awk '/totalfree/{print $9}')
-# Use 100th of available space divided by the number of cores that wil be used
-((fsize=(fsize/100)/ncpu)) #Check if big enough to exceed MFS cache
+# Use 100th of available space divided by the number of processes that wil be used
+((fsize=(fsize/100)/nproc)) #Check if big enough to exceed MFS cache
 
 #usage: RWSpeedTest filename [-]megabytes uri
 
@@ -34,13 +35,13 @@ fsize=$(/opt/mapr/server/mrconfig sp list | awk '/totalfree/{print $9}')
 #hadoop jar $MFS_TEST_JAR com.mapr.fs.RWSpeedTest /$localvol/RWTestSingleTest $fsize maprfs:/// ; exit
 
 #run RWSpeedTest writes
-for i in $(seq 1 $ncpu); do
+for i in $(seq 1 $nproc); do
    hadoop jar $MFS_TEST_JAR com.mapr.fs.RWSpeedTest /$localvol/RWTest${i} $fsize maprfs:/// &
 done
 wait
 
 #run RWSpeedTest reads
-for i in $(seq 1 $ncpu); do
+for i in $(seq 1 $nproc); do
    hadoop jar $MFS_TEST_JAR com.mapr.fs.RWSpeedTest /$localvol/RWTest${i} -$fsize maprfs:/// &
 done
 wait
