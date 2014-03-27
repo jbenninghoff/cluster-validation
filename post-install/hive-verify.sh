@@ -1,6 +1,8 @@
 #!/bin/bash
 
-hadoop fs -ls 
+# Script to verify hive works for non-root, non-mapr user
+#hadoop fs -mkdir /user/$(id -un) && hadoop fs -chown $(id -un):$(id -gn) /user/$(id -un)
+hadoop fs -ls || { echo Hive requires user directory, directory not found; exit 1; }
 #maprcli node cldbmaster # only works if mapr-core was installed
 
 cat - > /tmp/sample-table.txt <<EOF1
@@ -18,3 +20,5 @@ SELECT * FROM web_log;
 SELECT web_log.* FROM web_log WHERE web_log.url LIKE '%doc';
 quit;
 EOF2
+
+# Next step would be to run hive-bench to verify performance for the given cluster size
