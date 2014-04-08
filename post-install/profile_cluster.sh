@@ -10,7 +10,7 @@ OUTPUT_DIR="/tmp/profile_results.$$"
 RESULTS_DIR="$OUTPUT_DIR/node_results"
 CLUSTER_OUTPUT="$OUTPUT_DIR/cluster_profile.ini"
 CLUSTER_ZIP="/tmp/cluster-profile-$DATE.tar.gz"
-TERA_SCRIPT="runTeraTune.sh"
+TERA_SCRIPT="./runTeraTune.sh"
 TERA_LOG="$OUTPUT_DIR/teraTune.log"
 
 # Functions
