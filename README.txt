@@ -9,10 +9,11 @@ output log.
 
 Please use the steps below to test CPU/RAM, disk, and networking
 performance as well as to verify that your cluster meets MapR
-installation requirements. Pre-install tests must be run before
-installing MapR.  Post-install tests must be run after installing
-MapR.  Post-install tests help assure that the cluster is in good
-working order and ready to hand over to production.
+installation requirements. Pre-install tests should be run before
+installing MapR.  Post-install tests should be run after installing
+the MapR software and configuring a cluster.  Post-install tests 
+help assure that the cluster is in good working order and ready 
+to hand over to your production team.
 
 Install clush (rpm provided, also available via EPEL) on a machine
 with passwordless ssh to all other cluster nodes.  Update the file
