@@ -1,4 +1,6 @@
+==================
 Cluster Validation
+==================
 
 Before installing MapR Hadoop it is invaluable to validate the hardware and
 software that MapR will be dependent on.  Doing so will verify that items like
@@ -27,66 +29,89 @@ curl -LO 'https://github.com/jbenninghoff/cluster-validation/archive/master.zip'
 Extract with unzip master.zip and move the pre-install and post-install folder
 directly under /root for simplicity.
 
-Copy the /root/pre-install folder to all nodes in the cluster via
-clush.  For example, run:
-clush -a -c /root/pre-install
+Copy the /root/pre-install folder to all nodes in the cluster.  The
+clust commmand, properly configured, simplifies this :
+	clush -a --copy /root/pre-install
+	clush -Ba ls /root/pre-install	# confirm that all nodes have the utilties
 
+Step 1 : Gather Base Audit Information
+--------------------------------------
 Use cluster-audit.sh to verify that you have met the MapR installation
 requirements.  Run:
-/root/pre-install/cluster-audit.sh | tee cluster-audit.log
-on the node that runs clush.  Examine the log
-for inconsistency among any nodes.  Do not proceed until all
-inconsistencies have been resolved and all requirements such as 
-missing rpms, java version, etc have been met.
+	/root/pre-install/cluster-audit.sh | tee cluster-audit.log
+on the node where clush has been installed and configured to access
+all cluster nodes.  Examine the log for inconsistency among any nodes.  
+Do not proceed until all inconsistencies have been resolved and all 
+requirements such as missing rpms, java version, etc have been met.
 Please send the output of the cluster-audit.log back to us.
 
+	NOTE: cluster-audit.sh is designed for physical servers.   
+	Virtual Instances in cloud environments (eg Amazon, Google, or
+	OpenStack) may generate confusing responses to some specific
+	commands (eg dmidecode).  In most cases, these anomolies are
+	irrelevant.
+
+Step 2 : Evaluate Network Interconnect Bandwidth
+------------------------------------------------
 Use the RPC test to validate network bandwidth.  This will take
 about two minutes or so to run and produce output so please be
 patient.  Update the half1 and half2 arrays in the network-test.sh
 script to include the first and second half of the IP addresses of
 your cluster nodes.  Delete the exit command also.  Run:
-/root/pre-install/network-test.sh | tee network-test.log
-on the node that runs clush.  Expect about 90% of peak bandwidth
-for either 1GbE or 10GbE, which means ~115MB/sec or ~1100 MB/sec
-respectively.
+	/root/pre-install/network-test.sh | tee network-test.log
+on the node where clush has been installed and configured.
+Expect about 90% of peak bandwidth for either 1GbE or 10GbE
+networks:
+	1 GbE  ==>  ~115 MB/sec 
+	10 GbE ==> ~1100 MB/sec
 
-Run memory-test.sh This test will take about a minute or so to run.
-Run:
-clush -ab '/root/pre-install/memory-test.sh | grep ^Triad' | tee memory-test.log
+Step 3 : Evaluate Raw Memory Performance
+----------------------------------------
+Use the stream59 utility to test memory performance.  This test will take 
+about a minute or so to run.  It can be executed in parallel on all
+the cluster nodes with the command :
+	clush -Ba '/root/pre-install/memory-test.sh | grep ^Triad' | tee memory-test.log
 Memory bandwidth is determined by speed of DIMMs, number of memory
 channels and to a lesser degree by CPU frequency.  Current generation
 Xeon based servers with eight or more 1600MHz DIMMs can deliver
 70-80GB/sec Triad results. Previous generation Xeon cpus (Westmere)
 can deliver ~40GB/sec Triad results.
 
-Run disk-test.sh to validate disk and disk controller bandwidth.
-The process is destructive to disks except /dev/sda so please make
+Step 4 : Evaluate Raw Disk Performance
+--------------------------------------
+Use the iozone utility to test disk performance.  This process 
+is destructive to disks that are tested, so make sure that 
 sure that you have not installed MapR nor have any needed data on
-any disk except /dev/sda.
-Run:
-clush -ab /root/pre-install/disk-test.sh
-Current generation 7200 rpm SATA drives can produce 100-145 MB/sec
-sequential read and write results.
+those spindles.  The script as shipped will ONLY list out the 
+disks to be tested.   You MUST edit the script once you have
+verified that the list of spindles to test is correct.
+
+The test can be run in parallel on all nodes with:
+	clush -ab /root/pre-install/disk-test.sh
+
+Current generation (2012+) 7200 rpm SATA drives can produce 
+100-145 MB/sec sequential read and write performance.
 For larger numbers of disks there is a summIOzone.sh script that can help
 provide a summary of disk-test.sh output.
 
-When all three subsystem tests have passed and met expectations,
-there is an example install script in the pre-install folder that
-can be modified and used for a scripted install.  This script assumes
-the yum repos are configured and ready to go.  Read the script
-carefully to understand how a simple scripted install works.  The
-script MUST be modified to work in an actual cluster deployment.
+Complete Pre-Installation Checks
+--------------------------------
+When all subsystem tests have passed and met expectations,
+there may be an example install script in the pre-install folder that
+can be modified and used for a scripted install.  Otherwise, follow
+the instructions from the mapr.com web site for cluster installation.
 
-Post install tests are in the post-install folder.  The primary tests are
-RWSpeedTest and TeraSort.  Scripts
-to run each are provided in the folder.  Read the
-scripts for additional info.  
-A script to create a benchmarks volume
-(mkBMvol.sh) is provided as well as a script to generate the terabyte
-of data, runTeraGen.sh.  Be sure to create the benchmarks volume before
-running any of the post install benchmarks.
-runTeraSort.sh needs to be tuned to each
-specific cluster.  Experiment with the -D options as needed.
+Post install tests are in the post-install folder.  The primary 
+tests are RWSpeedTest and TeraSort.  Scripts to run each are 
+provided in the folder.  Read the scripts for additional info.  
+
+A script to create a benchmarks volume (mkBMvol.sh) is provided.
+Additionally, runTeraGen.sh is provided to to generate the terabyte
+of data necessary for the TeraSort benchmark.  Be sure to create the 
+benchmarks volume before running any of the post install benchmarks.
+	NOTE: The TeraSort benchmark (executed by runTeraSort.sh) 
+	will likely require tuning for each specific cluster.
+	Experiment with the -D options as needed.
 
 There is also a mapr-audit.sh script which can be run to provide
 an audit snapshot of the MapR configuration.  The script is a
