@@ -2,49 +2,54 @@
 # jbenninghoff@maprtech.com 2013-Oct-06  vi: set ai et sw=3 tabstop=3:
 
 # A sequence of parallel shell commands looking for system configuration
-# differences between all the nodes in a cluster
-# Requires clush, a parallel shell which requires passwordless ssh using an identity file
+# differences between all the nodes in a cluster.
+#
+# The script requires that the clush utility (a parallel execution tool)
+# be installed and configured for passwordless ssh connectivity to
+# all the nodes under test.
 
 sep='====================================================================='
 D=$(dirname "$0")
-abspath=$(cd "$D" 2>/dev/null && pwd || echo "$D")
+abspath=$(unset CDPATH  cd "$D" 2>/dev/null && pwd || echo "$D")
 eval enpath=$(echo /sys/kernel/mm/transparent_hugepage/enabled) #needs improvement
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos)
 shopt -s nocasematch
+[ `id -u` -ne 0 ] && SUDO=sudo
 
-#parg="-a -x rhel11,rhel16"
-parg="-g sen -B"
-parg="-aB"
-parg2='-g sen -B -o -qtt'
-parg2='-aB -o -qtt'
+# Arguments to pass in to our clush execution
+parg="-B -a"
+parg2='-B -a -o -q'
 
 echo ==================== Hardware audits ================================
 date; echo $sep
 # probe for system info ###############
-clush $parg2 "sudo dmidecode |grep -A2 '^System Information'"; echo $sep
-clush $parg2 "sudo dmidecode | grep -A3 '^BIOS I'"; echo $sep
+clush $parg2 "${SUDO:-} dmidecode | grep -A2 '^System Information'"; echo $sep
+clush $parg2 "${SUDO:-} dmidecode | grep -A3 '^BIOS I'"; echo $sep
+
 # probe for mem/dimm info ###############
 clush $parg "cat /proc/meminfo | grep -i ^memt | uniq"; echo $sep
-clush $parg2 "echo -n 'DIMM slots: '; sudo dmidecode |grep -c '^[[:space:]]*Locator:'"; echo $sep
-clush $parg2 "echo -n 'DIMM count is: '; sudo dmidecode | grep -c '^[[:space:]]Size: [0-9]* MB'"; echo $sep
-clush $parg2 "sudo dmidecode | awk '/Memory Device$/,/^$/ {print}' | grep -e '^Mem' -e Size: -e Speed: -e Part | sort -u | grep -v -e 'NO DIMM' -e 'No Module Installed' -e Unknown"; echo $sep
+clush $parg2 "echo -n 'DIMM slots: '; ${SUDO:-} dmidecode |grep -c '^[[:space:]]*Locator:'"; echo $sep
+clush $parg2 "echo -n 'DIMM count is: '; ${SUDO:-} dmidecode | grep -c '^[[:space:]]Size: [0-9]* MB'"; echo $sep
+clush $parg2 "${SUDO:-} dmidecode | awk '/Memory Device$/,/^$/ {print}' | grep -e '^Mem' -e Size: -e Speed: -e Part | sort -u | grep -v -e 'NO DIMM' -e 'No Module Installed' -e Unknown"; echo $sep
+
 # probe for cpu info ###############
 clush $parg "grep '^model name' /proc/cpuinfo | sort -u"; echo $sep
-#clush $parg "$abspath/id_cpu_x64 -L | grep -e ' bus freq=' -e 'microcode signature=' -e 'DPL (Stride)' -e 'L2 Streamer' -e 'DCU prefetcher' -e 'Sticky thermal status=' -e 'Stepping' -e 'This system has' -e prefetch | uniq -s 6" 
 clush $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' | awk '/^CPU MHz:/{sub(\$3,sprintf(\"%0.0f\",\$3))};{print}'"; echo $sep
+
 # probe for nic info ###############
-#clush $parg "ifconfig | grep -o ^eth.| xargs -l sudo /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
-#clush $parg "ifconfig | awk '/^[^ ]/ && \$1 !~ /lo/{print \$1}' | xargs -l sudo /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
+#clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
+#clush $parg "ifconfig | awk '/^[^ ]/ && \$1 !~ /lo/{print \$1}' | xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
 clush $parg "lspci | grep -i ether"
-clush $parg2 "/sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l sudo ethtool | grep -e ^Settings -e Speed"
+clush $parg2 "/sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l ${SUDO:-} ethtool | grep -e ^Settings -e Speed"
 #clush $parg "echo -n 'Nic Speed: '; /sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l -I % cat /sys/class/net/%/speed"
 echo $sep
+
 # probe for disk info ###############
 clush $parg "echo 'Storage Controller: '; lspci | grep -i -e raid -e storage -e lsi"; echo $sep
 clush $parg "dmesg | grep -i raid | grep -i scsi"; echo $sep
 case $distro in
    ubuntu)
-	clush $parg2 "sudo fdisk -l | grep '^Disk /.*:'"; echo $sep
+	clush $parg2 "${SUDO:-} fdisk -l | grep '^Disk /.*:'"; echo $sep
    ;;
    redhat|centos|red*)
 	clush $parg "lsblk -id | awk '{print \$1,\$4}'|sort | nl"; echo $sep
@@ -67,10 +72,10 @@ echo $sep
 case $distro in
    ubuntu)
       # Ubuntu SElinux tools not so good.
-      clush $parg2 "sudo apparmor_status | sed 's/([0-9]*)//'"; echo $sep
+      clush $parg2 "${SUDO:-} apparmor_status | sed 's/([0-9]*)//'"; echo $sep
       clush $parg "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo $sep
       clush $parg "echo 'Firewall status: '; service ufw status | head -10"; echo $sep
-      clush $parg2 "echo 'IPtables status: '; sudo iptables -L | head -10"; echo $sep
+      clush $parg2 "echo 'IPtables status: '; ${SUDO:-} iptables -L | head -10"; echo $sep
       clush $parg 'echo "NTP status "; service ntp status'; echo $sep
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
@@ -99,5 +104,5 @@ echo Hostname lookup
 clush $parg 'hostname -I'; echo $sep
 clush $parg "ls -d /opt/mapr/* | head" ; echo $sep
 clush $parg2 'echo -n "Open file limit(should be >32K): "; su - mapr -c "ulimit -n"' ; echo $sep
-clush $parg2 'echo "mapr login for Hadoop "; getent passwd mapr && { sudo echo ~mapr/.ssh; sudo ls ~mapr/.ssh; }'; echo $sep
-clush $parg2 'echo "Root login "; getent passwd root && { sudo echo ~root/.ssh; sudo ls ~root/.ssh; }'; echo $sep
+clush $parg2 'echo "mapr login for Hadoop "; getent passwd mapr && { ${SUDO:-} echo ~mapr/.ssh; ${SUDO:-} ls ~mapr/.ssh; }'; echo $sep
+clush $parg2 'echo "Root login "; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }'; echo $sep
