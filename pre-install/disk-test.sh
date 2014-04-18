@@ -37,7 +37,7 @@ cat - << 'EOF'
 EOF
 
 D=$(dirname "$0")
-abspath=$(unset CDPATH cd "$D" 2>/dev/null && pwd || echo "$D")
+abspath=$(unset CDPATH; cd "$D" 2>/dev/null && pwd || echo "$D")
 
 # Set list of device names for the 'for' loop
 # 	disks=$(lsblk -id | grep -o ^sd. | grep -v ^sda |sort); echo $disks

@@ -3,7 +3,7 @@
 # Run Stream benchmark or mem latency benchmark
 
 D=$(dirname "$0")
-abspath=$(unset CDPATH cd "$D" 2>/dev/null && pwd || echo "$D")
+abspath=$(unset CDPATH; cd "$D" 2>/dev/null && pwd || echo "$D")
 
 sockets=$(grep '^physical' /proc/cpuinfo | sort -u | grep -c ^)
 cores=$(grep '^cpu cores' /proc/cpuinfo | sort -u | awk '{print $NF}')

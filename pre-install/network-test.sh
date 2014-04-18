@@ -17,7 +17,7 @@ exit
 
 # This directory
 D=$(dirname "$0")
-abspath=$(unset CDPATH  cd "$D" 2>/dev/null && pwd || echo "$D")
+abspath=$(unset CDPATH; cd "$D" 2>/dev/null && pwd || echo "$D")
 
 # Define array of server hosts (half of all hosts in cluster)
 #	NOTE: use IP addresses to ensure specific NIC utilization
