@@ -10,7 +10,7 @@
 
 sep='====================================================================='
 D=$(dirname "$0")
-abspath=$(unset CDPATH  cd "$D" 2>/dev/null && pwd || echo "$D")
+abspath=$(unset CDPATH; cd "$D" 2>/dev/null && pwd || echo "$D")
 eval enpath=$(echo /sys/kernel/mm/transparent_hugepage/enabled) #needs improvement
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos)
 shopt -s nocasematch
