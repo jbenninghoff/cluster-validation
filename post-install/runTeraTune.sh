@@ -6,10 +6,14 @@ RUN_LOG="teraTune-$DATE-$$.log"
 TMP_LOG="/tmp/teraTuneTmp-$$.log"
 CYCLES=1
 REDUCE_CAPACITY="`maprcli dashboard info -json |grep '\"reduce_task_capacity\"' |sed -e 's/[^0-9]*//g'`"
-NODES=$(maprcli node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{if ($2>1) count++};END{print count}')
+NODES=$(maprcli node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{if ($2>0) count++};END{print count}')
 MAX_REDUCE=$REDUCE_CAPACITY
 if [ -n "$REDUCE_CAPACITY" -a -n "$NODES" -a $NODES -gt 0 ] ; then
-    let MAX_REDUCE=$REDUCE_CAPACITY/$NODES
+    if [ $NODES -gt $REDUCE_CAPACITY ] ; then
+        MAX_REDUCE=1
+    else
+        let MAX_REDUCE=$REDUCE_CAPACITY/$NODES
+    fi
 fi
 
 # Change RUN_LOG path if $1 specified
@@ -24,20 +28,23 @@ fi
 
 # DEBUG ONLY - START #
 DEBUG=0
-run[0]=410
-run[1]=386
-run[2]=380
-run[3]=377
-run[4]=433
-run[5]=388
-run[6]=383
-run[7]=380
-run[8]=394
-run[9]=384
-run[10]=381
-run[11]=386
-run[12]=394
-run[13]=391
+if [ $DEBUG -eq 1 ] ; then
+    MAX_REDUCE=99999
+    run[0]=410
+    run[1]=386
+    run[2]=380
+    run[3]=377
+    run[4]=433
+    run[5]=388
+    run[6]=383
+    run[7]=380
+    run[8]=394
+    run[9]=384
+    run[10]=381
+    run[11]=386
+    run[12]=394
+    run[13]=391
+fi
 # DEBUG ONLY - END #
 
 time_to_sec() {
@@ -94,6 +101,10 @@ do_run() {
         #echo "TIME: $my_time"
         rm "$TMP_LOG"
         my_fd="`time_to_sec $my_time`"
+        if [ $my_fd -eq 0 ] ; then
+            echo -ne "\nERROR: Received invalid time for test run. Exiting.\n"
+            exit 1
+        fi
     fi
     do_log "$my_fd\n"
 }
@@ -109,6 +120,9 @@ for cyc in `seq $CYCLES` ; do
     a=0
     b=0
     let c=2**2
+    if [ $c -gt $MAX_REDUCE ] ; then
+        c=$MAX_REDUCE
+    fi
     while [ 1 ] ; do
         do_run "$cyc" "$test_count" "$c"
         #echo -ne "$a\t$b\t$c\t$my_fd\n"
@@ -132,6 +146,13 @@ for cyc in `seq $CYCLES` ; do
             else # Slower, found max
                 break
             fi
+        fi
+        if [ $c -ge $MAX_REDUCE ] ; then # If c is already maxed, no point running with it AGAIN, break
+            c=$MAX_REDUCE
+            if [ $b -eq 0 ] ; then
+                b=$c
+            fi
+            break
         fi
         let c*=2
         if [ $c -gt $MAX_REDUCE ] ; then # No point having more reducers than reduce slots
@@ -159,6 +180,9 @@ for cyc in `seq $CYCLES` ; do
             
         fi
 
+        if [ $x -ge $MAX_REDUCE ] ; then # No point running more than MAX_REDUCE capacity and MAX has already been tested above
+            break
+        fi
         do_run "$cyc" "$test_count" "$x"
         #echo -ne "$a\t$b\t$c\t$x\t$my_fd\n"
         if [ $my_fd -lt $fast_duration ] ; then # Faster

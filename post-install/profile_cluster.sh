@@ -26,6 +26,7 @@ pcheck() {
 
 # Pre-checks
 pcheck clush
+pcheck nodeset
 pcheck maprcli
 
 if [ ! -e "$GEN_PROFILE" ] ; then
@@ -37,6 +38,17 @@ if [ -d "$RESULTS_DIR" ] ; then
     mv "$RESULTS_DIR" "$RESULTS_DIR.bk"
 fi
 mkdir -p "$RESULTS_DIR"
+
+# Check for Clush group definition and existence of nodes
+if [ ! -n "$CLUSH_TT_GROUP" ] ; then
+    echo "ERROR: clush task tracker group \"CLUSH_TT_GROUP\" must be defined. Exiting."
+    exit 1
+fi
+myNodes="`nodeset -e @$CLUSH_TT_GROUP`"
+if [ ! -n "$myNodes" ] ; then
+    echo "ERROR: CLUSH_TT_GROUP \"$CLUSH_TT_GROUP\" does not contain any nodes. Exiting."
+    exit 1
+fi
 
 # Copy gen_profile.sh script to all nodes
 clush -g "$CLUSH_TT_GROUP" "mkdir -p \"$CLUSH_DEST\""
