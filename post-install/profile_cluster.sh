@@ -12,6 +12,12 @@ CLUSTER_OUTPUT="$OUTPUT_DIR/cluster_profile.ini"
 CLUSTER_ZIP="/tmp/cluster-profile-$DATE.tar.gz"
 TERA_SCRIPT="./runTeraTune.sh"
 TERA_LOG="$OUTPUT_DIR/teraTune.log"
+CLUSH_CMD="clush"
+CLUSH_OPTIONS="--nostdin"
+NODESET_CMD="nodeset"
+MAPRCLI_CMD="maprcli"
+SSH_CMD=""
+#SSH_CMD="ssh root@node" # Uncomment to specify SSH HOST with maprcli
 
 # Functions
 pcheck() {
@@ -25,9 +31,9 @@ pcheck() {
 }
 
 # Pre-checks
-pcheck clush
-pcheck nodeset
-pcheck maprcli
+pcheck $CLUSH_CMD
+pcheck $NODESET_CMD
+pcheck $MAPRCLI_CMD
 
 if [ ! -e "$GEN_PROFILE" ] ; then
     echo "ERROR: $GEN_PROFILE script is missing. Exiting."
@@ -44,22 +50,23 @@ if [ ! -n "$CLUSH_TT_GROUP" ] ; then
     echo "ERROR: clush task tracker group \"CLUSH_TT_GROUP\" must be defined. Exiting."
     exit 1
 fi
-myNodes="`nodeset -e @$CLUSH_TT_GROUP`"
+myNodes="`$NODESET_CMD -e @$CLUSH_TT_GROUP`"
 if [ ! -n "$myNodes" ] ; then
     echo "ERROR: CLUSH_TT_GROUP \"$CLUSH_TT_GROUP\" does not contain any nodes. Exiting."
     exit 1
 fi
+clush_args="$CLUSH_OPTIONS -g $CLUSH_TT_GROUP"
 
 # Copy gen_profile.sh script to all nodes
-clush -g "$CLUSH_TT_GROUP" "mkdir -p \"$CLUSH_DEST\""
-clush -g "$CLUSH_TT_GROUP" --copy "$GEN_PROFILE" --dest "$CLUSH_DEST"
+$CLUSH_CMD $clush_args "mkdir -p \"$CLUSH_DEST\""
+$CLUSH_CMD $clush_args --copy "$GEN_PROFILE" --dest "$CLUSH_DEST"
 # Run gen_profile.sh script on all Task Tracker nodes
-clush -g "$CLUSH_TT_GROUP" -B "$CLUSH_DEST/$GEN_PROFILE"
+$CLUSH_CMD $clush_args -B "$CLUSH_DEST/$GEN_PROFILE"
 # Collect gen_profile.sh results from all nodes
-clush -g "$CLUSH_TT_GROUP" --rcopy "$GEN_PROFILE_OUTPUT" --dest "$RESULTS_DIR"
+$CLUSH_CMD $clush_args --rcopy "$GEN_PROFILE_OUTPUT" --dest "$RESULTS_DIR"
 # Remote cleanup
-#clush -g "$CLUSH_TT_GROUP" "rm -rf \"$CLUSH_DEST\""
-#clush -g "$CLUSH_TT_GROUP" "rm -f \"$GEN_PROFILE_OUTPUT\""
+#$CLUSH_CMD $clush_args "rm -rf \"$CLUSH_DEST\""
+#$CLUSH_CMD $clush_args "rm -f \"$GEN_PROFILE_OUTPUT\""
 # Analyze results
 c_node_distro="unknown"
 c_node_manufacturer="unknown"
@@ -90,6 +97,10 @@ EOF
 
 cd "$RESULTS_DIR"
 files=$(find node_profile.sh* -maxdepth 1 -type f)
+if [ ! -n "$files" ] ; then
+    echo "ERROR: no node_profile.sh* files found. Exiting."
+    exit 1
+fi
 for f in $files ; do
     # Save old values to check for homogenous cluster
     MEMORY_DIMS_P=$MEMORY_DIMS
@@ -216,13 +227,16 @@ let c_node_nic_count_avg=$c_node_nic_count_total/$count
 let c_node_disk_count_avg=$c_node_disk_count_total/$count
 
 # Grab cluster information from CLI
-map_capacity="`maprcli dashboard info -json |grep '\"map_task_capacity\"' |sed -e 's/[^0-9]*//g'`"
-reduce_capacity="`maprcli dashboard info -json |grep '\"reduce_task_capacity\"' |sed -e 's/[^0-9]*//g'`"
-nodes=$(maprcli node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{if ($2>1) count++};END{print count}')
-cluster_tt_nodes=$(maprcli node list -columns hostname,configuredservice -filter "[rp==/*]and[svc==tasktracker]" |tail -n +2 |wc --lines)
-mapr_version=$(maprcli dashboard info -version true |tail -1 |sed -e 's/[ \t]*//g')
-cluster_name=$(maprcli dashboard info -json |grep -A3 "cluster\":{" |grep "name" |sed -e 's/^.*:\"//' -e 's/\".*$//')
-cluster_id=$(maprcli dashboard info -json |grep -A3 "cluster\":{" |grep "id" |sed -e 's/^.*:\"//' -e 's/\".*$//')
+if [ -n "$SSH_CMD" ] ; then
+    MAPRCLI_CMD="$SSH_CMD $MAPRCLI_CMD"
+fi
+map_capacity="`$MAPRCLI_CMD dashboard info -json |grep '\"map_task_capacity\"' |sed -e 's/[^0-9]*//g'`"
+reduce_capacity="`$MAPRCLI_CMD dashboard info -json |grep '\"reduce_task_capacity\"' |sed -e 's/[^0-9]*//g'`"
+nodes=$($MAPRCLI_CMD node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{if ($2>0) count++};END{print count}')
+cluster_tt_nodes=$($MAPRCLI_CMD node list -columns hostname,configuredservice -filter "[rp==/*]and[svc==tasktracker]" |tail -n +2 |wc --lines)
+mapr_version=$($MAPRCLI_CMD dashboard info -version true |tail -1 |sed -e 's/[ \t]*//g')
+cluster_name=$($MAPRCLI_CMD dashboard info -json |grep -A3 "cluster\":{" |grep "name" |sed -e 's/^.*:\"//' -e 's/\".*$//')
+cluster_id=$($MAPRCLI_CMD dashboard info -json |grep -A3 "cluster\":{" |grep "id" |sed -e 's/^.*:\"//' -e 's/\".*$//')
 
 cd - >/dev/null 2>&1
 # Complete cluster profile
