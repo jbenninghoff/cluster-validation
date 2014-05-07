@@ -14,11 +14,11 @@ abspath=$(unset CDPATH; cd "$D" 2>/dev/null && pwd || echo "$D")
 eval enpath=$(echo /sys/kernel/mm/transparent_hugepage/enabled) #needs improvement
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 shopt -s nocasematch
-[ `id -u` -ne 0 ] && SUDO=sudo
+[ $(id -u) -ne 0 ] && SUDO=sudo
 
 # Arguments to pass in to our clush execution
 parg="-B -a"
-parg2='-B -a -o -q'
+parg2='-B -a -o -qtt'
 
 echo ==================== Hardware audits ================================
 date; echo $sep
@@ -102,7 +102,11 @@ clush $parg 'java -version; echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo 
 clush $parg 'java -XX:+PrintFlagsFinal -version |& grep MaxHeapSize'; echo $sep
 echo Hostname lookup
 clush $parg 'hostname -I'; echo $sep
+echo DNS lookup
+clush $parg 'host $(hostname -f)'; echo $sep
+echo Reverse DNS lookup
+clush $parg 'host $(hostname -i)'; echo $sep
 clush $parg "ls -d /opt/mapr/* | head" ; echo $sep
-clush $parg2 'echo -n "Open file limit(should be >32K): "; ${SUDO:-} su - mapr -c "ulimit -n"' ; echo $sep
-clush $parg2 'echo "mapr login for Hadoop "; getent passwd mapr && { ${SUDO:-} echo ~mapr/.ssh; ${SUDO:-} ls ~mapr/.ssh; }'; echo $sep
-clush $parg2 'echo "Root login "; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }'; echo $sep
+clush $parg2 "echo -n 'Open file limit(should be >32K): '; ${SUDO:-} su - mapr -c 'ulimit -n'" ; echo $sep
+clush $parg2 "echo 'mapr login for Hadoop '; getent passwd mapr && { ${SUDO:-} echo ~mapr/.ssh; ${SUDO:-} ls ~mapr/.ssh; }"; echo $sep
+clush $parg2 "echo 'Root login '; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }"; echo $sep
