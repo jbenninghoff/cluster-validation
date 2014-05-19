@@ -13,6 +13,14 @@ cd /opt/MegaCli/
 echo Edit this script carefully to use LSI megacli to configure the virtual drives optimally for MapR
 exit
 
+# Linux device handle to LSI drive ID mapping, ID is 2nd to last digit
+#jbenning@fusion1 zsh%0 ls -l /sys/block/sd*/device                              
+#lrwxrwxrwx 1 root root 0 May 16 14:35 /sys/block/sda/device -> ../../../2:0:0:0
+#lrwxrwxrwx 1 root root 0 May 16 14:23 /sys/block/sdb/device -> ../../../2:0:1:0
+#lrwxrwxrwx 1 root root 0 May 16 14:35 /sys/block/sdc/device -> ../../../2:0:2:0
+#lrwxrwxrwx 1 root root 0 May 16 14:36 /sys/block/sdd/device -> ../../../2:0:3:0
+# Last component is a 4 part digit grouped: controllerID:channelID:DRIVEid:LUN
+
 #==================================================================
 # Here is how we accomplish this via the command line using LSI MegaCli64 tool:
 # This assumes the OS is on /dev/sda and that /dev/sda maps to LSI drive ID 0(zero)
