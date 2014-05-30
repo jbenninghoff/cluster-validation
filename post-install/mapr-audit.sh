@@ -5,6 +5,10 @@
 # A sequence of maprcli commands to probe installed system configuration
 # Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
 
+parg='-B -g all' # Assuming clush group 'all' is configured to reach all nodes
+#node='ssh -qtt lgpbd1000' #Single node to run maprcli commands from
+[ $(id -u) -ne 0 ] && SUDO=sudo
+sep='====================================================================='
 verbose=false
 while getopts ":v" opt; do
   case $opt in
@@ -12,6 +16,44 @@ while getopts ":v" opt; do
     \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
   esac
 done
+
+echo ==================== MapR audits ================================
+date; echo $sep
+echo Hadoop jobs queued
+${node:-} hadoop job -list; echo $sep
+echo MapR Dashboard
+${node:-} ${SUDO:-} maprcli dashboard info -json; echo $sep
+echo MapR Alarms
+${node:-} ${SUDO:-} maprcli alarm list -json; echo $sep
+echo MapR Services
+${node:-} ${SUDO:-} maprcli node list -columns hostname,svc
+echo zookeepers:
+${node:-} ${SUDO:-} maprcli node listzookeepers; echo $sep
+echo MapR map and reduce slots
+${node:-} ${SUDO:-} maprcli node list -columns hostname,cpus,ttmapSlots,ttReduceSlots; echo $sep
+echo MapR Volumes
+${node:-} ${SUDO:-} maprcli volume list -columns numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
+echo MapR Storage Pools
+clush $parg ${SUDO:-} /opt/mapr/server/mrconfig sp list; echo $sep
+echo MapR env settings
+clush $parg ${SUDO:-} grep ^export /opt/mapr/conf/env.sh
+echo mapred-site.xml checksum
+clush $parg ${SUDO:-} sum /opt/mapr/hadoop/hadoop-0.20.2/conf/mapred-site.xml; echo $sep
+echo MapR Central Configuration setting
+clush $parg ${SUDO:-} grep centralconfig /opt/mapr/conf/warden.conf
+echo MapR Central Logging setting
+clush $parg ${SUDO:-} grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh
+clush $parg ${SUDO:-} 'maprcli disk list -output terse -system 0 -host $(hostname)'
+clush $parg ${SUDO:-} ls /opt/mapr/roles
+#$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
+[ "$verbose" == "true" ] && clush $parg ${SUDO:-} '/opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'
+[ "$verbose" == "true" ] && ${node:-} ${SUDO:-} maprcli dump balancerinfo | sort -r; echo $sep
+[ "$verbose" == "true" ] && ${node:-} ${SUDO:-} hadoop conf -dump | sort; echo $sep
+[ "$verbose" == "true" ] && ${node:-} ${SUDO:-} maprcli config load -json; echo $sep
+# TBD:
+# check all mapr-* packages installed
+# check all hadoop* packages installed
+
 # set verbose to false, true or full
 # Use new bash case switch/fallthrough using ;& instead of ;;
 # case $verbose in
@@ -26,46 +68,3 @@ done
 #     ;&
 # esac
 
-sep='====================================================================='
-D=$(dirname "$0"); abspath=$(cd "$D" 2>/dev/null && pwd || echo "$D")
-
-shopt -s expand_aliases
-unalias psh 2>/dev/null; alias psh='clush -b'
-parg='-g mapr' # Assuming clush group 'mapr' is configured to reach all nodes
-parg='-a' # Assuming clush is configured to reach all nodes
-snode='ssh lgpbd1000' #Single node to run maprcli commands from
-snode='' #Set to null if current node can run maprcli commands as well as clush commands
-
-echo ==================== MapR audits ================================
-date; echo $sep
-$node hadoop job -list; echo $sep
-$node maprcli dashboard info -json; echo $sep
-
-echo MapR Alarms
-$node maprcli alarm list -json; echo $sep
-echo MapR Services
-$node maprcli node list -columns hostname,svc
-echo zookeepers:
-$node maprcli node listzookeepers; echo $sep
-echo MapR map and reduce slots
-$node maprcli node list -columns hostname,cpus,ttmapSlots,ttReduceSlots; echo $sep
-echo MapR Volumes
-$node maprcli volume list -columns numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
-echo MapR Storage Pools
-psh $parg /opt/mapr/server/mrconfig sp list; echo $sep
-[ "$verbose" == "true" ] && $node maprcli dump balancerinfo | sort -r; echo $sep
-#$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
-
-psh $parg cat /opt/mapr/conf/env.sh
-echo mapred-site.xml checksum
-psh $parg sum /opt/mapr/hadoop/hadoop-0.20.2/conf/mapred-site.xml; echo $sep
-psh $parg grep centralconfig /opt/mapr/conf/warden.conf
-psh $parg grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh
-psh $parg 'maprcli disk list -output terse -system 0 -host $(hostname)'
-psh $parg 'ls /opt/mapr/roles'
-[ "$verbose" == "true" ] && psh $parg '/opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'
-[ "$verbose" == "true" ] && $node hadoop conf -dump | sort; echo $sep
-[ "$verbose" == "true" ] && $node maprcli config load -json; echo $sep
-# TBD:
-# check all mapr-* packages installed
-# check all hadoop* packages installed
