@@ -5,28 +5,22 @@ find_unused_disks() {
     disks=""
     for d in `fdisk -l 2>/dev/null | grep -e "^Disk .* bytes$" | awk '{print $2}' `; do
         dev=${d%:}
-
-        mount | grep -q -w -e $dev -e ${dev}1 -e ${dev}2 && continue
-
-        swapon -s | grep -q -w $dev && continue
-        type pvdisplay &> /dev/null && pvdisplay $dev &> /dev/null && continue
+        mount | grep -q -w -e $dev -e ${dev}1 -e ${dev}2 && continue #if mounted skip device
+        swapon -s | grep -q -w $dev && continue #if swap partition skip device
+        type pvdisplay &> /dev/null && pvdisplay $dev &> /dev/null && continue #if physical volume is part of LVM (swap vol TBD)
 
         disks="$disks $dev"
     done
-
-    MAPR_DISKS="$disks"
-    export MAPR_DISKS
+    export MAPR_DISKS="$disks"
 }
 
 cat - << 'EOF'
-
 # Parallel IOzone tests to stress/measure disk controller
 # These tests are destructive therefore the must be run BEFORE 
 # formatting the devices for the MapR filesystem (disksetup -F ..)
 # Run iozone command once on a single device to verify iozone command
 #
 #	NOTE: logs are created in the current working directory
-
 EOF
 
 D=$(dirname "$0")

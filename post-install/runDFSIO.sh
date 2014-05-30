@@ -18,8 +18,6 @@ hadoop jar /opt/mapr/hadoop/hadoop-0.20.2/hadoop-0.20.2-dev-test.jar TestDFSIO\
 
 echo Resulting metric is per map slot 
 
-# MapR single task IO benchmark, requires filename, size(+/-MB) and URI:
-# hadoop jar lib/maprfs-test-01.jar com.mapr.fs.RWSpeedTest /benchmarks/testfile 1000 maprfs:///
-
 # Quick test of map-reduce.  Can be used right after building/rebuild a cluster
 # hadoop jar /opt/mapr/hadoop/hadoop-0.20.2/hadoop-0.20.2-dev-examples.jar pi 10 10
+# hadoop jar /opt/mapr/hadoop/hadoop-0.20.2/hadoop-0.20.2-dev-examples.jar wordcount file:///etc/services apacheWC

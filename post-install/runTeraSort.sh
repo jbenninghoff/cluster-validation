@@ -23,6 +23,11 @@ head -32 $logname  # show the top of the log with elapsed time, etc
 # To validate TeraSort output, uncomment below and change output folder
 # hadoop jar /opt/mapr/hadoop/hadoop-0.20.2/hadoop-0.20.2-dev-examples.jar teravalidate /benchmarks/tera/run1 /benchmarks/tera/run1validate
 
-#-Dmapred.reduce.slowstart.completed.maps=0.25 \
+#-Dmapred.job.shuffle.input.buffer.percent=.90 \
+#-Dmapred.job.shuffle.merge.percent=.90 \
+#-Dmapreduce.maprfs.use.compression=true \
+#-Dmapred.job.reduce.input.buffer.percent=0.80 \
+#-Dmapred.inmem.merge.threshold=0 \
+#-Dmapred.reduce.slowstart.completed.maps=0.75 \
 #-Dmapred.map.child.java.opts="-Xmx880m" \
 
