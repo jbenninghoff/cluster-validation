@@ -39,12 +39,14 @@ for i in $(seq 1 $nproc); do
    hadoop jar $MFS_TEST_JAR com.mapr.fs.RWSpeedTest /$localvol/RWTest${i} $fsize maprfs:/// &
 done
 wait
+sleep 9
 
 #run RWSpeedTest reads
 for i in $(seq 1 $nproc); do
    hadoop jar $MFS_TEST_JAR com.mapr.fs.RWSpeedTest /$localvol/RWTest${i} -$fsize maprfs:/// &
 done
 wait
+sleep 9
 
 maprcli volume unmount -name $localvol
 maprcli volume remove -name $localvol
