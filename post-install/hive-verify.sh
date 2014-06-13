@@ -13,6 +13,7 @@ EOF1
 
 hive <<EOF2
 set hive.cli.print.header=true;
+set mapred.reduce.tasks=2;
 DROP TABLE web_log;
 CREATE TABLE web_log(viewTime INT, userid BIGINT, url STRING, referrer STRING, ip STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
 LOAD DATA LOCAL INPATH '/tmp/sample-table.txt' INTO TABLE web_log;
