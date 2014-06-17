@@ -26,15 +26,15 @@ date; echo $sep
 clush $parg2 "${SUDO:-} dmidecode | grep -A2 '^System Information'"; echo $sep
 clush $parg2 "${SUDO:-} dmidecode | grep -A3 '^BIOS I'"; echo $sep
 
+# probe for cpu info ###############
+clush $parg "grep '^model name' /proc/cpuinfo | sort -u"; echo $sep
+clush $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' | awk '/^CPU MHz:/{sub(\$3,sprintf(\"%0.0f\",\$3))};{print}'"; echo $sep
+
 # probe for mem/dimm info ###############
 clush $parg "cat /proc/meminfo | grep -i ^memt | uniq"; echo $sep
 clush $parg2 "echo -n 'DIMM slots: '; ${SUDO:-} dmidecode |grep -c '^[[:space:]]*Locator:'"; echo $sep
 clush $parg2 "echo -n 'DIMM count is: '; ${SUDO:-} dmidecode | grep -c '^[[:space:]]Size: [0-9]* MB'"; echo $sep
 clush $parg2 "${SUDO:-} dmidecode | awk '/Memory Device$/,/^$/ {print}' | grep -e '^Mem' -e Size: -e Speed: -e Part | sort -u | grep -v -e 'NO DIMM' -e 'No Module Installed' -e Unknown"; echo $sep
-
-# probe for cpu info ###############
-clush $parg "grep '^model name' /proc/cpuinfo | sort -u"; echo $sep
-clush $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' | awk '/^CPU MHz:/{sub(\$3,sprintf(\"%0.0f\",\$3))};{print}'"; echo $sep
 
 # probe for nic info ###############
 #clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
