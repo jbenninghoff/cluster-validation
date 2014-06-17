@@ -5,8 +5,8 @@
 # A sequence of maprcli commands to probe installed system configuration
 # Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
 
-parg='-B -g all' # Assuming clush group 'all' is configured to reach all nodes
 #node='ssh -qtt lgpbd1000' #Single node to run maprcli commands from
+parg='-B -g all' # Assuming clush group 'all' is configured to reach all nodes
 [ $(id -u) -ne 0 ] && SUDO=sudo
 sep='====================================================================='
 verbose=false
@@ -34,7 +34,7 @@ ${node:-} ${SUDO:-} maprcli node list -columns hostname,cpus,ttmapSlots,ttReduce
 echo MapR Volumes
 ${node:-} ${SUDO:-} maprcli volume list -columns numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
 echo MapR Storage Pools
-clush $parg ${SUDO:-} /opt/mapr/server/mrconfig sp list; echo $sep
+clush $parg ${SUDO:-} /opt/mapr/server/mrconfig sp list -v; echo $sep
 echo MapR env settings
 clush $parg ${SUDO:-} grep ^export /opt/mapr/conf/env.sh
 echo mapred-site.xml checksum
@@ -43,15 +43,19 @@ echo MapR Central Configuration setting
 clush $parg ${SUDO:-} grep centralconfig /opt/mapr/conf/warden.conf
 echo MapR Central Logging setting
 clush $parg ${SUDO:-} grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh
+echo MapR disk list per host
 clush $parg ${SUDO:-} 'maprcli disk list -output terse -system 0 -host $(hostname)'
+echo MapR roles per host
 clush $parg ${SUDO:-} ls /opt/mapr/roles
+echo MapR packages installed
+clush $parg ${SUDO:-} 'rpm -qa | grep mapr-'
+
 #$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
 [ "$verbose" == "true" ] && clush $parg ${SUDO:-} '/opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'
 [ "$verbose" == "true" ] && ${node:-} ${SUDO:-} maprcli dump balancerinfo | sort -r; echo $sep
 [ "$verbose" == "true" ] && ${node:-} ${SUDO:-} hadoop conf -dump | sort; echo $sep
 [ "$verbose" == "true" ] && ${node:-} ${SUDO:-} maprcli config load -json; echo $sep
 # TBD:
-# check all mapr-* packages installed
 # check all hadoop* packages installed
 
 # set verbose to false, true or full

@@ -18,9 +18,11 @@ exit
 # This directory
 D=$(dirname "$0")
 abspath=$(unset CDPATH; cd "$D" 2>/dev/null && pwd || echo "$D")
+# Define -c option for concurrent mode and eliminate that hand edit.  Maybe -i option for iperf too.
 
 # Define array of server hosts (half of all hosts in cluster)
 #	NOTE: use IP addresses to ensure specific NIC utilization
+#  The list of all IP addresses can be retrieved with this clush command:  clush -aN hostname -i | sort -n
 half1=(10.66.99.1 10.66.99.2 10.66.99.3 10.66.99.4 10.66.99.5 10.66.99.6 10.66.99.7 10.66.99.8)
 
 for node in "${half1[@]}"; do
@@ -40,9 +42,9 @@ for node in "${half2[@]}"; do
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
   #ssh -n $node "$abspath/iperf -c ${half1[$i]} -t 30 -i3 > iperftest.log" & iperf alternative test
   #ssh -n $node "$abspath/iperf -c ${half1[$i]} -t 30 -i3 -w 16K # 16K socket buffer/window size MapR uses
-  #ssh -n $node "/opt/mapr/server/tools/rpctest -client 5000 ${half1[$i]} | tee rpctest.log" # Sequential mode
+  #ssh -n $node "/opt/mapr/server/tools/rpctest -client 5000 ${half1[$i]} | tee ${half1[$i]}-rpctest.log" # Sequential mode
   #Sequential mode can be used to help isolate NIC and cable issues from switch overload issues that concurrent mode may expose
-  ssh -n $node "$abspath/rpctest -client 5000 ${half1[$i]} > rpctest.log" & # Concurrent mode, comment out if using sequential mode
+  ssh -n $node "$abspath/rpctest -client 5000 ${half1[$i]} > ${half1[$i]}-rpctest.log" & # Concurrent mode, comment out if using sequential mode
   ((i++))
 done
 echo Clients have been launched
