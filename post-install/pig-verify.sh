@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Script to verify pig works for non-root, non-mapr user
-hadoop fs -mkdir /user/$(id -un) && hadoop fs -chown $(id -un):$(id -gn) /user/$(id -un)
-hadoop fs -ls || { echo Hive requires user directory, directory not found; exit 1; }
-hadoop fs -chmod 777 /tmp
+sudo hadoop fs -mkdir /user/$(id -un) && sudo hadoop fs -chown $(id -un):$(id -gn) /user/$(id -un)
+hadoop fs -ls || { echo Pig requires user directory, directory not found; exit 1; }
+sudo hadoop fs -chmod 777 /tmp
 
 hadoop fs -copyFromLocal /opt/mapr/pig/pig-0.12/tutorial/data/excite-small.log /tmp
 pig <<-'EOF'
@@ -13,5 +13,5 @@ B = FOREACH A GENERATE FLATTEN(TOKENIZE(*));
 C = GROUP B BY $0;
 D = FOREACH C GENERATE group, COUNT(B);
 STORE D INTO 'wordcount';
--EOF
+EOF
 

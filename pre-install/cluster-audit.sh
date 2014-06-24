@@ -17,8 +17,9 @@ shopt -s nocasematch
 [ $(id -u) -ne 0 ] && SUDO=sudo
 
 # Arguments to pass in to our clush execution
-parg="-B -a"
-parg2='-B -a -o -qtt'
+clcnt=$(nodeset -c @all)
+parg="-B -a -f $clcnt"
+parg2="$parg -o -qtt"
 
 echo ==================== Hardware audits ================================
 date; echo $sep
