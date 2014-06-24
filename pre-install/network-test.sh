@@ -52,7 +52,7 @@ wait $! # comment out for Sequential mode
 sleep 5
 
 tmp=${half2[@]}
-clush -w ${tmp// /,} grep -i -e ^Rate -e error rpctest.log # Print the network bandwidth (mb/s is MB/sec), 1GbE=125MB/s, 10GbE=1250MB/s
+clush -w ${tmp// /,} grep -i -e ^Rate -e error \*-rpctest.log # Print the network bandwidth (mb/s is MB/sec), 1GbE=125MB/s, 10GbE=1250MB/s
 
 tmp=${half1[@]}
 clush -w ${tmp// /,} pkill rpctest #Kill the servers
