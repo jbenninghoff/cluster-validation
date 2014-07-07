@@ -100,9 +100,9 @@ provide a summary of disk-test.sh output.
 Complete Pre-Installation Checks
 --------------------------------
 When all subsystem tests have passed and met expectations,
-there may be an example install script in the pre-install folder that
+there is an example install script in the pre-install folder that
 can be modified and used for a scripted install.  Otherwise, follow
-the instructions from the mapr.com web site for cluster installation.
+the instructions from the doc.mapr.com web site for cluster installation.
 
 Post install tests are in the post-install folder.  The primary 
 tests are RWSpeedTest and TeraSort.  Scripts to run each are 
