@@ -21,11 +21,14 @@ Install clustershell (rpm provided, also available via EPEL) on a machine
 with passwordless ssh to all other cluster nodes.  If using a
 non-root account, then non-root account must have passwordless
 sudo rights configured in /etc/sudoers.  Update the file
-/etc/clustershell/groups to include an entry for "all" matching a
-pattern or patterns of host names.  For example;
-all: node[0-10]
-Verify clush works correctly by running "clush -a date".  Compare
-results with "clush -ab date".
+`/etc/clustershell/groups` to include an entry for "all" matching a
+pattern or patterns of host names in your cluster.  For example;
+
+    all: node[0-10]
+Verify clush works correctly by running:
+    "clush -a date"
+Compare results with:
+    "clush -ab date".
 
 Download and extract the cluster-validation package with a command like this:
 
