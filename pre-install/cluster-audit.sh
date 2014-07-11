@@ -108,6 +108,6 @@ clush $parg 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup
 clush $parg 'host $(hostname -i)'; echo $sep
 clush $parg "ls -d /opt/mapr/* | head" ; echo $sep
-clush $parg2 "echo -n 'Open file limit(should be >32K): '; ${SUDO:-} su - mapr -c 'ulimit -n'" ; echo $sep
+clush $parg2 "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -n'" ; echo $sep
 clush $parg2 "echo 'mapr login for Hadoop '; getent passwd mapr && { ${SUDO:-} echo ~mapr/.ssh; ${SUDO:-} ls ~mapr/.ssh; }"; echo $sep
 clush $parg2 "echo 'Root login '; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }"; echo $sep
