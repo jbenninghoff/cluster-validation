@@ -10,7 +10,7 @@ cores=$(grep '^cpu cores' /proc/cpuinfo | sort -u | awk '{print $NF}')
 thrds=$(grep '^siblings' /proc/cpuinfo | sort -u | awk '{print $NF}')
 NAME=$abspath/stream59 #no AVX,just movnt, best Stream build of the 3
 #objdump -d $NAME | grep 'movnt.*mm' | head
-eval enpath=$(echo /sys/kernel/mm/*transparent_hugepage/enabled)
+eval enpath=$(echo /sys/kernel/mm/transparent_hugepage/enabled)
 
 if [ "$1" == "lat" ]; then
    echo 'Running lat_mem(lmbench) to measure memory latency in nano seconds'
