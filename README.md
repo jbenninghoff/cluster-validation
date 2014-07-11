@@ -28,8 +28,9 @@ Verify clush works correctly by running "clush -a date".  Compare
 results with "clush -ab date".
 
 Download and extract the cluster-validation package with a command like this:
-curl -L -o cluster-validation.tgz http://github.com/jbenninghoff/cluster-validation/tarball/master
-Extract with tar in /root or your home folder and rename the top level folder like this:
+
+    curl -L -o cluster-validation.tgz http://github.com/jbenninghoff/cluster-validation/tarball/master
+Extract with tar in /root or your home folder and rename the top level folder like this:  
     mv jbenninghoff-cluster-validation-* cluster-validation
 
 Copy the cluster-validation folder to all nodes in the cluster.  The
