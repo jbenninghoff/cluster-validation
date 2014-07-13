@@ -8,7 +8,7 @@
 #Disk Cache Policy: enabled
 
 echo These are the key LSI controller settings affecting disk IO performance
-cd /opt/MegaRaid/MegaCli/
+cd /opt/MegaRAID/MegaCli/
 ./MegaCli64 -ldinfo -lall -aall | grep -e ^Strip -e '^Virtual Drive:' -e '^Current Cache Policy:' -e '^Disk Cache Policy:'
 echo Edit this script carefully to use LSI megacli to configure the virtual drives optimally for MapR
 exit
@@ -22,11 +22,11 @@ exit
 # Last component is a 4 part digit grouped: controllerID:channelID:DRIVEid:LUN
 
 #==================================================================
-# Here is how we accomplish this via the command line using LSI MegaCli64 tool:
+# Unconfigure all drives except ID 0 (/dev/sda) via the command line using LSI MegaCli64
 # This assumes the OS is on /dev/sda and that /dev/sda maps to LSI drive ID 0(zero)
 # This must be done BEFORE MapR FS is installed and configured (configure.sh)
 #===================================================================
-#dsks=$(/opt/MegaCli/MegaCli64 -ldgetprop) #Should be some way to get LSI disk count
+#dsks=$(/opt/MegaCli/MegaCli64 -ldgetprop) #Grep someting to get LSI disk count
 dsks=24
 for i in $(seq 1 $dsks);  do
     # skips ID 0, assumes it is /dev/sda which is assumed to be OS drive.  Check assumptions in your system
