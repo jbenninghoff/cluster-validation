@@ -128,7 +128,9 @@ for cyc in `seq $CYCLES` ; do
         #echo -ne "$a\t$b\t$c\t$my_fd\n"
         if [ $a -eq 0 ] ; then # First run
             fast_duration=$my_fd
-            a=$c
+            if [ $c -lt $MAX_REDUCE ] ; then # Shouldn't set a to MAX on first run, otherwise next while loop cycle is cut short
+                a=$c
+            fi
         elif [ $b -eq 0 ] ; then # Second run
             if [ $my_fd -gt $fast_duration ] ; then # Already slower
                 b=$a
@@ -173,11 +175,16 @@ for cyc in `seq $CYCLES` ; do
         let to_fin=$c-$a
         if [ $to_fin -le 3 ] ; then # Back to middle
             let x=$a+1
+            let z=$x+1 # Special case for 3 Reducers max, where c=3, 1 & 2 need to be tested
+            if [ $z -ge $b ] ; then
+                fin=1
+            fi
             if [ $x -eq $b ] ; then
                 let x+=1
             fi
-            fin=1
-            
+            if [ $x -eq $c ] ; then # Special case for 3 Reducers max, where c=3, 1 & 2 need to be tested
+                break
+            fi
         fi
 
         if [ $x -ge $MAX_REDUCE ] ; then # No point running more than MAX_REDUCE capacity and MAX has already been tested above
@@ -186,7 +193,11 @@ for cyc in `seq $CYCLES` ; do
         do_run "$cyc" "$test_count" "$x"
         #echo -ne "$a\t$b\t$c\t$x\t$my_fd\n"
         if [ $my_fd -lt $fast_duration ] ; then # Faster
-            a=$b
+            if [ $x -gt $b ] ; then # Properly constrict range
+                a=$b
+            else
+                c=$x
+            fi
             b=$x
             fast_duration=$my_fd
         elif [ $my_fd -gt $fast_duration ] ; then # Slower
