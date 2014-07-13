@@ -1,4 +1,3 @@
-==================
 Cluster Validation
 ==================
 
@@ -115,24 +114,29 @@ there is an example install script in the pre-install folder that
 can be modified and used for a scripted install.  Otherwise, follow
 the instructions from the doc.mapr.com web site for cluster installation.
 
+Post Installation tests
+--------------------------------
 Post install tests are in the post-install folder.  The primary 
 tests are RWSpeedTest and TeraSort.  Scripts to run each are 
 provided in the folder.  Read the scripts for additional info.  
 
-A script to create a benchmarks volume (mkBMvol.sh) is provided.
-Additionally, runTeraGen.sh is provided to to generate the terabyte
+A script to create a benchmarks volume `mkBMvol.sh` is provided.
+Additionally, `runTeraGen.sh` script is provided to to generate the terabyte
 of data necessary for the TeraSort benchmark.  Be sure to create the 
 benchmarks volume before running any of the post install benchmarks.
 
 	NOTE: The TeraSort benchmark (executed by runTeraSort.sh) 
 	will likely require tuning for each specific cluster.
+   At a minimum, pass integer arguments in powers of 2 (e.g. 4, 8, etc)
+   to the script to increase the number of reduce tasks per node up to
+   the maximum reduce slots available on your cluster.
 	Experiment with the -D options as needed.
 
-There is also a mapr-audit.sh script which can be run to provide
-an audit snapshot of the MapR configuration.  The script is a
-useful set of example maprcli commands. There are also example install,
-upgrade and uninstall scripts.  None of those will run without editing, so
-read the scripts carefully to understand how to edit them with site specific
-info.
+The post-install folder contains a mapr-audit.sh script which can
+be run to provide an audit snapshot of the MapR configuration.  The
+script is a useful set of example maprcli commands. There are also
+example install, upgrade and uninstall scripts.  None of those will
+run without editing, so read the scripts carefully to understand
+how to edit them with site specific info.
 
 /John Benninghoff
