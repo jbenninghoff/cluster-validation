@@ -9,6 +9,7 @@
 parg='-B -g all' # Assuming clush group 'all' is configured to reach all nodes
 [ $(id -u) -ne 0 ] && SUDO=sudo
 sep='====================================================================='
+#msg="what ever"; printf "%s%s \n" "$msg" "${sep:${#msg}}"
 verbose=false
 while getopts ":v" opt; do
   case $opt in
@@ -24,7 +25,7 @@ ${node:-} hadoop job -list; echo $sep
 echo MapR Dashboard
 ${node:-} ${SUDO:-} maprcli dashboard info -json; echo $sep
 echo MapR Alarms
-${node:-} ${SUDO:-} maprcli alarm list -json; echo $sep
+${node:-} ${SUDO:-} maprcli alarm list -summary true; echo $sep
 echo MapR Services
 ${node:-} ${SUDO:-} maprcli node list -columns hostname,svc
 echo zookeepers:
@@ -43,14 +44,14 @@ echo MapR Central Configuration setting
 clush $parg ${SUDO:-} grep centralconfig /opt/mapr/conf/warden.conf
 echo MapR Central Logging setting
 clush $parg ${SUDO:-} grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh
-echo MapR disk list per host
-clush $parg ${SUDO:-} 'maprcli disk list -output terse -system 0 -host $(hostname)'
 echo MapR roles per host
 clush $parg ${SUDO:-} ls /opt/mapr/roles
 echo MapR packages installed
 clush $parg ${SUDO:-} 'rpm -qa | grep mapr-'
 
 #$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
+#echo MapR disk list per host
+[ "$verbose" == "true" ] && clush $parg ${SUDO:-} 'maprcli disk list -output terse -system 0 -host $(hostname)'
 [ "$verbose" == "true" ] && clush $parg ${SUDO:-} '/opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'
 [ "$verbose" == "true" ] && ${node:-} ${SUDO:-} maprcli dump balancerinfo | sort -r; echo $sep
 [ "$verbose" == "true" ] && ${node:-} ${SUDO:-} hadoop conf -dump | sort; echo $sep

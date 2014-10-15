@@ -47,7 +47,7 @@ Step 1 : Gather Base Audit Information
 Use cluster-audit.sh to verify that you have met the MapR installation
 requirements.  Run:
 
-    /root/pre-install/cluster-audit.sh | tee cluster-audit.log
+    /root/cluster-validation/pre-install/cluster-audit.sh | tee cluster-audit.log
 on the node where clush has been installed and configured to access
 all cluster nodes.  Examine the log for inconsistency among any nodes.  
 Do not proceed until all inconsistencies have been resolved and all 
@@ -68,21 +68,21 @@ patient.  Update the half1 and half2 arrays in the network-test.sh
 script to include the first and second half of the IP addresses of
 your cluster nodes.  Delete the exit command also.  Run:
 
-    /root/pre-install/network-test.sh | tee network-test.log
+    /root/cluster-validation/pre-install/network-test.sh | tee network-test.log
 on the node where clush has been installed and configured.
 Expect about 90% of peak bandwidth for either 1GbE or 10GbE
 networks:
 
 	1 GbE  ==>  ~115 MB/sec 
-	10 GbE ==> ~1100 MB/sec
+	10 GbE ==> ~1150 MB/sec
 
 Step 3 : Evaluate Raw Memory Performance
 ----------------------------------------
-Use the stream59 utility to test memory performance.  This test will take 
+Use the stream59 benchmark to test memory performance.  This test will take 
 about a minute or so to run.  It can be executed in parallel on all
 the cluster nodes with the command:
 
-    clush -Ba '/root/pre-install/memory-test.sh | grep ^Triad' | tee memory-test.log
+    clush -Ba '/root/cluster-validation/pre-install/memory-test.sh | grep ^Triad' | tee memory-test.log
 Memory bandwidth is determined by speed of DIMMs, number of memory
 channels and to a lesser degree by CPU frequency.  Current generation
 Xeon based servers with eight or more 1600MHz DIMMs can deliver
@@ -91,7 +91,7 @@ can deliver ~40GB/sec Triad results.
 
 Step 4 : Evaluate Raw Disk Performance
 --------------------------------------
-Use the iozone utility to test disk performance.  This process 
+Use the iozone benchmark to test disk performance.  This process 
 is destructive to disks that are tested, so make sure that 
 sure that you have not installed MapR nor have any needed data on
 those spindles.  The script as shipped will ONLY list out the 
@@ -100,7 +100,7 @@ verified that the list of spindles to test is correct.
 
 The test can be run in parallel on all nodes with:
 
-    clush -ab /root/pre-install/disk-test.sh
+    clush -ab /root/cluster-validation/pre-install/disk-test.sh
 
 Current generation (2012+) 7200 rpm SATA drives can produce 
 100-145 MB/sec sequential read and write performance.
@@ -125,12 +125,11 @@ Additionally, `runTeraGen.sh` script is provided to to generate the terabyte
 of data necessary for the TeraSort benchmark.  Be sure to create the 
 benchmarks volume before running any of the post install benchmarks.
 
-	NOTE: The TeraSort benchmark (executed by runTeraSort.sh) 
-	will likely require tuning for each specific cluster.
-   At a minimum, pass integer arguments in powers of 2 (e.g. 4, 8, etc)
-   to the script to increase the number of reduce tasks per node up to
-   the maximum reduce slots available on your cluster.
-	Experiment with the -D options as needed.
+    NOTE: The TeraSort benchmark (executed by runTeraSort.sh) will likely
+    require tuning for each specific cluster.  At a minimum, pass integer
+    arguments in powers of 2 (e.g. 4, 8, etc) to the script to increase the
+    number of reduce tasks per node up to the maximum reduce slots available on
+    your cluster.  Experiment with the -D options as needed.
 
 The post-install folder contains a mapr-audit.sh script which can
 be run to provide an audit snapshot of the MapR configuration.  The
