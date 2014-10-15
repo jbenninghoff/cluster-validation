@@ -3,6 +3,7 @@
 # Script to verify hive works for non-root, non-mapr user
 #hadoop fs -mkdir /user/$(id -un) && hadoop fs -chown $(id -un):$(id -gn) /user/$(id -un)
 hadoop fs -ls || { echo Hive requires user directory, directory not found; exit 1; }
+sudo hadoop fs -chmod 1777 /user/hive/warehouse  #accessible to all but can only delete own files
 #maprcli node cldbmaster # only works if mapr-core was installed
 
 cat - > /tmp/sample-table.txt <<EOF1

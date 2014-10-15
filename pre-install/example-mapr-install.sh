@@ -39,7 +39,7 @@ ssh -qtt $node1 "${SUDO:-} yum -y install mapr-webserver"  # Install webserver t
 clush $clargs -a "${SUDO:-} sed -i 's,^#export JAVA_HOME=,export JAVA_HOME=/usr/java/jdk1.7.0_51,' /opt/mapr/conf/env.sh"
 
 # Configure ALL nodes with the CLDB and Zookeeper info (-N does not like spaces in the name)
-clush $clargs -a "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zkcldb) -C $(nodeset -S, -e @zkcldb) -u mapr -g mapr"
+clush $clargs -a "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zkcldb) -C $(nodeset -S, -e @zkcldb) -u mapr -g mapr -no-autostart"
 [ $? -ne 0 ] && { echo configure.sh failed, check screen for errors; exit 2; }
 
 # Identify and format the data disks for MapR

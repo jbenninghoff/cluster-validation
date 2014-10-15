@@ -18,7 +18,7 @@ exit
 # This directory
 D=$(dirname "$0")
 abspath=$(unset CDPATH; cd "$D" 2>/dev/null && pwd || echo "$D")
-# Define -c option for concurrent mode and eliminate that hand edit.  Maybe -i option for iperf too.
+# Define -a -c option for concurrent mode and eliminate that hand edit.  Maybe -i option for iperf too.
 
 # Define array of server hosts (half of all hosts in cluster)
 #	NOTE: use IP addresses to ensure specific NIC utilization
@@ -53,6 +53,7 @@ sleep 5
 
 tmp=${half2[@]}
 clush -w ${tmp// /,} grep -i -e ^Rate -e error \*-rpctest.log # Print the network bandwidth (mb/s is MB/sec), 1GbE=125MB/s, 10GbE=1250MB/s
+clush -w ${tmp// /,} 'tar czf network-tests-${${$(date -Im)%-*}/:/-}.tgz *-rpctest.log' # Tar up the log files
 
 tmp=${half1[@]}
 clush -w ${tmp// /,} pkill rpctest #Kill the servers
