@@ -40,13 +40,13 @@ clush $parg2 "${SUDO:-} dmidecode | awk '/Memory Device$/,/^$/ {print}' | grep -
 # probe for nic info ###############
 #clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
 #clush $parg "ifconfig | awk '/^[^ ]/ && \$1 !~ /lo/{print \$1}' | xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
-clush $parg "/sbin/lspci | grep -i ether"
-clush $parg2 "/sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l sudo ethtool | grep -e ^Settings -e Speed"
+clush $parg2 "${SUDO:-} lspci | grep -i ether"
+clush $parg2 "${SUDO:-} ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l sudo ethtool | grep -e ^Settings -e Speed"
 #clush $parg "echo -n 'Nic Speed: '; /sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l -I % cat /sys/class/net/%/speed"
 echo $sep
 
 # probe for disk info ###############
-clush $parg "echo 'Storage Controller: '; /sbin/lspci | grep -i -e raid -e storage -e lsi"; echo $sep
+clush $parg2 "echo 'Storage Controller: '; ${SUDO:-} lspci | grep -i -e raid -e storage -e lsi"; echo $sep
 clush $parg "dmesg | grep -i raid | grep -i scsi"; echo $sep
 case $distro in
    ubuntu)
@@ -57,7 +57,7 @@ case $distro in
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
-clush $parg "df -hT | cut -c23-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
+clush $parg -u 30 "df -hT | cut -c23-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep mapper"
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep -v mapper"
 
@@ -66,7 +66,7 @@ echo $sep
 clush $parg "cat /etc/*release | uniq"; echo $sep
 clush $parg "uname -srvm | fmt"; echo $sep
 clush $parg date; echo $sep
-clush $parg /sbin/sysctl vm.swappiness net.ipv4.tcp_retries2 vm.overcommit_memory
+clush $parg2 "${SUDO:-} sysctl vm.swappiness net.ipv4.tcp_retries2 vm.overcommit_memory"; echo $sep
 echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 0\nnet.ipv4.tcp_retries2 = 2\nvm.overcommit_memory = 0"
 echo $sep
 
@@ -75,20 +75,20 @@ case $distro in
       # Ubuntu SElinux tools not so good.
       clush $parg2 "${SUDO:-} apparmor_status | sed 's/([0-9]*)//'"; echo $sep
       clush $parg "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo $sep
-      clush $parg "echo 'Firewall status: '; /sbin/service ufw status | head -10"; echo $sep
+      clush $parg2 "echo 'Firewall status: '; ${SUDO:-} service ufw status | head -10"; echo $sep
       clush $parg2 "echo 'IPtables status: '; ${SUDO:-} iptables -L | head -10"; echo $sep
-      clush $parg 'echo "NTP status "; /sbin/service ntp status'; echo $sep
+      clush $parg2 'echo "NTP status "; ${SUDO:-} service ntp status'; echo $sep
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
    redhat|centos|red*)
       clush $parg "ntpstat | head -1" ; echo $sep
       clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config" ; echo $sep
-      clush $parg "/sbin/chkconfig --list iptables" ; echo $sep
+      clush $parg2 "${SUDO:-} chkconfig --list iptables" ; echo $sep
       #clush $parg "/sbin/service iptables status | grep -m 3 -e ^Table -e ^Chain" 
-      clush $parg "/sbin/service iptables status | head -10"; echo $sep
+      clush $parg2 "${SUDO:-} service iptables status | head -10"; echo $sep
       #clush $parg "echo -n 'Frequency Governor: '; for dev in /sys/devices/system/cpu/cpu[0-9]*; do cat \$dev/cpufreq/scaling_governor; done | uniq -c" 
-      clush $parg "echo -n 'CPUspeed Service: '; /sbin/service cpuspeed status" 
-      clush $parg "echo -n 'CPUspeed Service: '; /sbin/chkconfig --list cpuspeed"; echo $sep
+      clush $parg2 "echo -n 'CPUspeed Service: '; ${SUDO:-} service cpuspeed status" 
+      clush $parg2 "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
       clush $parg 'echo Missing RPMs: ; for each in make patch redhat-lsb irqbalance syslinux hdparm sdparm dmidecode nc rpcbind nfs-utils dstat redhat-lsb-core git gcc openjdk-devel; do rpm -q $each | grep "is not installed"; done' ; echo $sep
    ;;
