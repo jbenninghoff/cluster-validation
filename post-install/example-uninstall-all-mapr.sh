@@ -14,6 +14,8 @@ clush -a -B service mapr-warden stop
 clush -a -B service mapr-zookeeper stop
 clush -a -B jps
 clush -a -B 'ps ax | grep mapr'
+# Clean the yum cache on RHEL based servers (in case you want to redeploy the server)
+clush -a -B yum clean all
 # commands below are destructive and deliberately commented out
 #clush -a -B 'rpm -e $(rpm -qa --queryformat "%{NAME}\n"|grep ^mapr)'
 #clush -a -B 'rm -rf /opt/mapr'
