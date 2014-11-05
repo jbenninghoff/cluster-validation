@@ -9,12 +9,10 @@
 # all the nodes under test.
 
 sep='====================================================================='
-D=$(dirname "$0")
-abspath=$(unset CDPATH; cd "$D" 2>/dev/null && pwd || echo "$D")
-eval enpath=$(echo /sys/kernel/mm/transparent_hugepage/enabled) #needs improvement
+scriptdir="$(cd "$(dirname "$0")"; pwd -P)"
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
-shopt -s nocasematch
 [ $(id -u) -ne 0 ] && SUDO=sudo
+shopt -s nocasematch
 
 # Arguments to pass in to our clush execution
 clcnt=$(nodeset -c @all)
@@ -97,7 +95,7 @@ esac
 shopt -u nocasematch
 
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
-clush $parg "echo -n 'Transparent Huge Pages: '; cat $enpath" ; echo $sep
+clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
 clush $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" ; echo $sep
 clush $parg 'java -version; echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
 clush $parg 'java -XX:+PrintFlagsFinal -version |& grep MaxHeapSize'; echo $sep
