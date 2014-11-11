@@ -20,7 +20,7 @@ done
 
 echo ==================== MapR audits ================================
 date; echo $sep
-echo Hadoop jobs queued
+msg="Hadoop Jobs Status"; printf "%s%s \n" "$msg" "${sep:${#msg}}"
 ${node:-} hadoop job -list; echo $sep
 echo MapR Dashboard
 ${node:-} ${SUDO:-} maprcli dashboard info -json; echo $sep
