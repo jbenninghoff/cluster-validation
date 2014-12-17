@@ -39,7 +39,7 @@ for node in "${half2[@]}"; do
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
   #ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -i3 > iperftest.log" & iperf alternative test
   #ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -i3 -w 16K # 16K socket buffer/window size MapR uses
-  #ssh -n $node "/opt/mapr/server/tools/rpctest -client 5000 ${half1[$i]} | tee ${half1[$i]}-rpctest.log" # Sequential mode
+  #ssh -n $node "$scriptdir/rpctest -client 5000 ${half1[$i]} | tee ${half1[$i]}-rpctest.log" # Sequential mode
   #Sequential mode can be used to help isolate NIC and cable issues from switch overload issues that concurrent mode may expose
   ssh -n $node "$scriptdir/rpctest -client 5000 ${half1[$i]} > ${half1[$i]}-rpctest.log" & # Concurrent mode, comment out if using sequential mode
   ((i++))

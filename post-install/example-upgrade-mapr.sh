@@ -45,3 +45,30 @@ maprcli config save -values {mapr.targetversion:"$(</opt/mapr/MapRBuildVersion)"
 #clush -Ba 'rm -f /opt/mapr/conf/disktab'
 #clush -Ba "lsblk -id | grep -o ^sd. | grep -v ^sda |sort|sed 's,^,/dev/,' | tee /tmp/disk.list; wc /tmp/disk.list"
 #clush -Ba '/opt/mapr/server/disksetup -W $(cat /tmp/disk.list | wc -l) -F /tmp/disk.list'
+
+# 1391  hadoop fs -ls /
+# 1392  clush -b -g zkcldb ls /opt/mapr/zkdata
+# 1393  clush -ab service mapr-warden stop
+# 1394  clush -b -g zkcldb service mapr-zookeeper stop
+# 1395  clush -b -g zkcldb ls /opt/mapr/zookeeper/zk_cleanup.sh
+# 1396  clush -b -g zkcldb rm -rf  /opt/mapr/zkdata/*
+# 1405  clush -b -g zkcldb rm -rf  /opt/mapr/zkdata/*
+# 1407  clush -b -g zkcldb ls /opt/mapr/zkdata/
+# 1408  echo 0 > /opt/mapr/zkdata/myid
+# 1409  ssh cent02 'echo 1 > /opt/mapr/zkdata/myid'
+# 1410  ssh cent03 'echo 2 > /opt/mapr/zkdata/myid'
+# 1411  clush -b -g zkcldb service mapr-zookeeper start
+# 1412  clush -b -g zkcldb service mapr-zookeeper qstatus
+# 1417  less /opt/mapr/conf/cldb.conf
+# 1422  echo cldb.ignore.stale.zk=true
+# 1423  echo cldb.ignore.stale.zk=true | clush -b -g zkcldb 'cat - >> /opt/mapr/conf/cldb.conf'
+# 1424  clush -b -g zkcldb 'tail /opt/mapr/conf/cldb.conf'
+# 1425  clush -ab service mapr-warden start
+# 1428  clush -b -g zkcldb 'tail /opt/mapr/logs/cldb.log'
+#sleep 180
+# 1429  maprcli node cldbmaster
+# 1430  hadoop fs -ls /
+# 1423  clush -b -g zkcldb 'sed "/cldb.ignore.stale.zk=true/s//#cldb.ignore.stale.zk=true/" /opt/mapr/conf/cldb.conf'
+# clush -b -g zkcldb 'sed -i.bak "/cldb.ignore.stale.zk=true/s//#cldb.ignore.stale.zk=true/" /opt/mapr/conf/cldb.conf'
+# 1425  clush -ab service mapr-warden restart
+

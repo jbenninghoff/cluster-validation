@@ -1,22 +1,24 @@
 #!/bin/bash
 
 # Script to verify pig works for non-root, non-mapr user
-sudo hadoop fs -mkdir /user/$(id -un) && sudo hadoop fs -chown $(id -un):$(id -gn) /user/$(id -un)
 hadoop fs -ls || { echo Pig requires user directory, directory not found; exit 1; }
-sudo hadoop fs -mkdir /tmp
-sudo hadoop fs -chmod 777 /tmp
+#sudo hadoop fs -mkdir /user/$(id -un) && sudo hadoop fs -chown $(id -un):$(id -gn) /user/$(id -un)
+#sudo hadoop fs -mkdir /tmp
+#sudo hadoop fs -chmod 777 /tmp
 
 hadoop fs -copyFromLocal /opt/mapr/pig/pig-0.12/tutorial/data/excite-small.log /tmp
-pig <<-'EOF'
-SET mapred.map.child.java.opts '-Xmx1g'
-A = LOAD '/tmp/excite-small.log' USING TextLoader() AS (words:chararray);
-B = FOREACH A GENERATE FLATTEN(TOKENIZE(*));
-C = GROUP B BY $0;
-D = FOREACH C GENERATE group, COUNT(B);
-STORE D INTO 'wordcount';
-EOF
 
-echo 'Pig website with tutorial: http://pig.apache.org/docs/r0.13.0/start.html'
+pig <<-'EOF'
+set mapred.map.child.java.opts '-Xmx1g'
+lines = load '/tmp/excite-small.log' using TextLoader() as (line:chararray);  -- load a file from hadoop FS
+words = foreach lines generate flatten(TOKENIZE(line,' \t')) as word; -- Split each line into words using space and tab as delimiters
+uniqwords = group words by word;
+wordcount = foreach uniqwords generate group, COUNT(words);
+dump wordcount;
+EOF
+#store wordcount into 'pig-wordcount';
+
+#echo 'Pig website with tutorial: http://pig.apache.org/docs/r0.13.0/start.html'
 
 # Pig code to load hive table
 #tab = load 'tablename' using HCatLoader();
