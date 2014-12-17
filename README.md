@@ -37,7 +37,7 @@ Extract with tar in /root or your home folder and rename the top level folder li
     mv jbenninghoff-cluster-validation-* cluster-validation
 
 Copy the cluster-validation folder to all nodes in the cluster.  The
-clush commmand simplifies this:
+clush command simplifies this:
 
     clush -a --copy /path.../cluster-validation --dest /path.../cluster-validation
     clush -Ba ls /path.../cluster-validation	# confirm that all nodes have the utilties
@@ -51,7 +51,7 @@ requirements.  Run:
 on the node where clush has been installed and configured to access
 all cluster nodes.  Examine the log for inconsistency among any nodes.  
 Do not proceed until all inconsistencies have been resolved and all 
-requirements such as missing rpms, java version, etc have been met.
+requirements such as missing rpms, Java version, etc. have been met.
 Please send the output of the cluster-audit.log back to us.
 
 	NOTE: cluster-audit.sh is designed for physical servers.   
@@ -62,8 +62,8 @@ Please send the output of the cluster-audit.log back to us.
 
 Step 2 : Evaluate Network Interconnect Bandwidth
 ------------------------------------------------
-Use the RPC test to validate network bandwidth.  This will take
-about two minutes or so to run and produce output so please be
+Use the network test to validate network bandwidth.  This will take
+about two minutes or so to run and produce output so be
 patient.  Update the half1 and half2 arrays in the network-test.sh
 script to include the first and second half of the IP addresses of
 your cluster nodes.  Delete the exit command also.  Run:
