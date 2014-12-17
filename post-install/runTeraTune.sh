@@ -1,12 +1,25 @@
 #!/bin/bash
 # dgomerman@maprtech.com 2014-Mar-25
 DATE="`date +%Y-%m-%d-%H:%M`"
+YARN="false"
+MRV=$(maprcli cluster mapreduce get |tail -1 |awk '{print $1}')
+if [ "$MRV" == "yarn" ] ; then
+    YARN="true"
+fi
 EXECUTABLE="./runTeraSort.sh"
 RUN_LOG="teraTune-$DATE-$$.log"
 TMP_LOG="/tmp/teraTuneTmp-$$.log"
 CYCLES=1
-REDUCE_CAPACITY="`maprcli dashboard info -json |grep '\"reduce_task_capacity\"' |sed -e 's/[^0-9]*//g'`"
-NODES=$(maprcli node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{if ($2>0) count++};END{print count}')
+
+
+if [ "$YARN" == "false" ] ; then # MRv1
+    REDUCE_CAPACITY="`maprcli dashboard info -json |grep '\"reduce_task_capacity\"' |sed -e 's/[^0-9]*//g'`"
+    NODES=$(maprcli node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{if ($2>0) count++};END{print count}')
+else # MRv2 Yarn
+    REDUCE_CAPACITY="`maprcli node list -columns hostname,cpus,service,disks |grep nodemanager | awk '/^[1-9]/{count+=$4}; END{print count}'`"
+    NODES=$(maprcli node list -columns hostname,cpus,service |grep nodemanager |wc --lines)
+fi
+
 MAX_REDUCE=$REDUCE_CAPACITY
 if [ -n "$REDUCE_CAPACITY" -a -n "$NODES" -a $NODES -gt 0 ] ; then
     if [ $NODES -gt $REDUCE_CAPACITY ] ; then
@@ -200,7 +213,7 @@ for cyc in `seq $CYCLES` ; do
             fi
             b=$x
             fast_duration=$my_fd
-        elif [ $my_fd -gt $fast_duration ] ; then # Slower
+        elif [ $my_fd -ge $fast_duration ] ; then # Slower, count = as slower
             if [ $x -gt $b ] ; then
                 c=$x
             else
