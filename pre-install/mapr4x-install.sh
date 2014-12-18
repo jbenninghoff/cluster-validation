@@ -48,7 +48,7 @@ exit
 
 clush $clargs -a 'rpm --import http://package.mapr.com/releases/pub/maprgpg.key'
 # Install all servers with minimal rpms to provide storage and compute plus NFS
-clush $clargs -v -a "${SUDO:-} yum -y install mapr-fileserver mapr-nfs mapr-tasktracker mapr-nodemanager"
+clush $clargs -v -a "${SUDO:-} yum -y install mapr-fileserver mapr-nfs mapr-nodemanager"
 
 # Service Layout option #1 ====================
 # Admin services layered over data nodes defined in rm and zkcldb groups
@@ -59,7 +59,7 @@ clush $clargs -g hist "${SUDO:-} yum -y install mapr-historyserver" #YARN histor
 
 # Service Layout option #2 ====================
 # Admin services on dedicated nodes, uncomment the line below
-#clush $clargs -g rm,zkcldb "${SUDO:-} yum -y erase mapr-tasktracker mapr-nodemanager"
+#clush $clargs -g rm,zkcldb "${SUDO:-} yum -y erase mapr-nodemanager"
 
 # Check for correct java version and set JAVA_HOME
 clush $clargs -a "${SUDO:-} sed -i 's,^#export JAVA_HOME=,export JAVA_HOME=/usr/lib/jvm/java-1.7.0-openjdk-1.7.0.55.x86_64,' /opt/mapr/conf/env.sh"
