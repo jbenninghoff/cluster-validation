@@ -14,6 +14,7 @@ clush -a -B service mapr-warden stop
 clush -a -B service mapr-zookeeper stop
 clush -a -B jps
 clush -a -B 'ps ax | grep mapr'
+clush -a -B 'pkill -u mapr'
 # commands below are destructive and deliberately commented out
 #clush -a -B 'rpm -e $(rpm -qa --queryformat "%{NAME}\n"|grep ^mapr)'
 #clush -a -B 'rm -rf /opt/mapr'
