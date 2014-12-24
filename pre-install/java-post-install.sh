@@ -1,6 +1,6 @@
 #!/bin/bash
 
-javapath=/usr/java/jdk1.7.0_51
+javapath=/usr/java/default
 [ -d $javapath ] || { echo $javapath does not exist; exit 1; }
 
 for item in java javac javaws jar jps javah; do
