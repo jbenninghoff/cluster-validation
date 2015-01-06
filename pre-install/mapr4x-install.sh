@@ -20,15 +20,12 @@ grep ^hist /etc/clustershell/groups || { echo clustershell group: rm undefined; 
 [[ -z "${node1// /}" ]] && { echo Primary node name not set.  Set or check node1 in this script; exit 2; }
 clush -S -aB 'grep -i mapr /etc/yum.repos.d/* | grep -v ^/etc/yum.repos.d/maprtech.repo' && { echo Unexpected MapR repos; exit 3; }
 clush -S -aB id $admin1 || { echo $admin1 does not exist on all nodes; exit 3; }
+clush -S -aB id mapr || { echo mapr user does not exist on all nodes; exit 3; }
 clush -S -aB "$JAVA_HOME/bin/java -version" || { echo $JAVA_HOME/bin/java does not exist on all nodes; exit 3; }
 
 cat - << 'EOF'
-# Assumes clush is installed, available from EPEL repository
 # Assumes all nodes have been audited with cluster-audit.sh and all issues fixed
 # Assumes all nodes have met subsystem performance expectations as measured by memory-test.sh, network-test.sh and disk-test.sh
-# Assumes MapR yum repo or repo mirror has been configured for all nodes and that MapR will run as mapr user
-# e.g. clush -abc /etc/yum.repos.d/maprtech.repo
-# Assumes rm, zkcldb, rm, hist and all group have been defined for clush in /etc/clustershell/groups
 EOF
 
 #Create 4.x repos on all nodes
