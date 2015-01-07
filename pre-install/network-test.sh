@@ -1,6 +1,7 @@
 #!/bin/bash
 # jbenninghoff@maprtech.com 2013-Jun-07  vi: set ai et sw=3 tabstop=3:
-# TBD: Define -a -c option for concurrent mode and eliminate that hand edit.  Maybe -i option for iperf too.
+# TBD: generate IP list with clush, pad list if length of list is odd, split list in half
+# The list of all IP addresses can be retrieved with this clush command:  clush -aN hostname -i | sort -n
 
 cat - << 'EOF'
 # Use MapR rpctest to validate network bandwidth for worst case, bisection.
@@ -15,42 +16,71 @@ cat - << 'EOF'
 # After that, comment out the exit command below to execute the full script
 EOF
 
+concurrent=false; runiperf=false
+while getopts ":ci" opt; do
+  case $opt in
+    c) concurrent=true ;;
+    i) runiperf=true ;;
+    \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
+  esac
+done
+
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script's directory
 
+#############################################################
 # Define array of server hosts (half of all hosts in cluster)
-#	NOTE: use IP addresses to ensure specific NIC utilization
-#  The list of all IP addresses can be retrieved with this clush command:  clush -aN hostname -i | sort -n
+#  NOTE: use IP addresses to ensure specific NIC utilization
 half1=(10.10.100.165 10.10.100.166 10.10.100.167)
 
 for node in "${half1[@]}"; do
+  case $runiperf in
+    true)
+      ssh -n $node $scriptdir/iperf -s -i3 &  # iperf alternative test, requires iperf binary pushed out to all nodes like rpctest
+      ;;
+    false)
+      ssh -n $node $scriptdir/rpctest -server &
+      ;;
+  esac
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
-  #ssh -n $node $scriptdir/iperf -s -i3&  # iperf alternative test, requires iperf binary pushed out to all nodes like rpctest
-  ssh -n $node $scriptdir/rpctest -server &
 done
 echo Servers have been launched
-sleep 9 # let the servers set up
+sleep 9 # let the servers stabilize
 
+#############################################################
 # Define 2nd array of client hosts (other half of all hosts in cluster)
-#	NOTE: use IP addresses to ensure specific NIC utilization
+#  NOTE: use IP addresses to ensure specific NIC utilization
 half2=(10.10.100.168 10.10.100.169)
 
-i=0
+i=0 # index into array
 for node in "${half2[@]}"; do
-  #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
-  #ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -i3 > iperftest.log" & iperf alternative test
-  #ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -i3 -w 16K # 16K socket buffer/window size MapR uses
-  #ssh -n $node "$scriptdir/rpctest -client 5000 ${half1[$i]} | tee ${half1[$i]}-rpctest.log" # Sequential mode
-  #Sequential mode can be used to help isolate NIC and cable issues from switch overload issues that concurrent mode may expose
-  ssh -n $node "$scriptdir/rpctest -client 5000 ${half1[$i]} > ${half1[$i]}-rpctest.log" & # Concurrent mode, comment out if using sequential mode
+  case $concurrent in
+     true)
+       if [ $runiperf == "true" ]; then
+         ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -i3 -w 16K > ${half1[$i]}-iperf.log" & # 16K socket buffer/window size MapR uses
+       else
+         ssh -n $node "$scriptdir/rpctest -client 5000 ${half1[$i]} > ${half1[$i]}-rpctest.log" &
+       fi
+       ;;
+     false) #Sequential mode can be used to help isolate NIC and cable issues versus switch overload issues
+       if [ $runiperf == "true" ]; then
+         ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -i3 -w 16K > ${half1[$i]}-iperf.log" # 16K socket buffer/window size MapR uses
+       else
+         ssh -n $node "$scriptdir/rpctest -client 5000 ${half1[$i]} > ${half1[$i]}-rpctest.log"
+       fi
+       ;;
+  esac
   ((i++))
+  #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
 echo Clients have been launched
-wait $! # comment out for Sequential mode
+[ $concurrent == "true" ] && wait $! 
 sleep 5
 
 tmp=${half2[@]}
-clush -w ${tmp// /,} grep -i -e ^Rate -e error \*-rpctest.log # Print the network bandwidth (mb/s is MB/sec), 1GbE=125MB/s, 10GbE=1250MB/s
-clush -w ${tmp// /,} 'tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz *-rpctest.log; rm *-rpctest.log' # Tar up the log files
+[ $concurrent == "true" ] && echo Concurrent network throughput results || echo Sequential network throughput results
+[ $runiperf == "true" ] &&  clush -w ${tmp// /,} grep -i -H -e ^Rate -e error \*-iperf.log # Print the measured bandwidth (string TBD)
+[ $runiperf == "false" ] &&  clush -w ${tmp// /,} grep -i -H -e ^Rate -e error \*-rpctest.log #Print the network bandwidth (mb/s is MB/sec), 1GbE=125MB/s, 10GbE=1250MB/s
+clush -w ${tmp// /,} 'tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz *-rpctest.log *-iperf.log; rm *-rpctest.log' # Tar up the log files
 
 tmp=${half1[@]}
 clush -w ${tmp// /,} pkill rpctest #Kill the servers
