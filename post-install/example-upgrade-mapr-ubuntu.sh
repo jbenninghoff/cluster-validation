@@ -4,11 +4,11 @@
 #Can run as a script as long as clustershell is set up correctly and no Hadoop jobs are running.  Does not address HBase or ecosystem components, additional steps required, see the docs.
 
 #root@n001:~# cat /etc/clustershell/groups
-#zk: n0[09-10,19,29,35].hadoop.prod.sfo1.beats
-#cldb: n0[11,20,30,39].hadoop.prod.sfo1.beats
-#jt: n0[13,21,31,40].hadoop.prod.sfo1.beats
-#nfs: n0[02-08/2,12-18/2,22-28/2,32-38/2].hadoop.prod.sfo1.beats
-#all: n0[01-40].hadoop.prod.sfo1.beats
+#zk: n0[09-10,19,29,35].my.domain
+#cldb: n0[11,20,30,39].my.domain
+#jt: n0[13,21,31,40].my.domain
+#nfs: n0[02-08/2,12-18/2,22-28/2,32-38/2].my.domain
+#all: n0[01-40].my.domain
 
 clush -B -w @all ‘echo “deb http://package.mapr.com/releases/v3.0.2/ubuntu/ mapr optional” >> /etc/apt/sources.list’
 clush -B -w @all apt-get update
