@@ -27,7 +27,7 @@ pattern or patterns of host names in your cluster.  For example;
 Verify clush works correctly by running:
     "clush -a date"
 Compare results with:
-    "clush -ab date".
+    "clush -ab date"
 
 Download and extract the cluster-validation package with a command like this:
 
@@ -63,10 +63,13 @@ Please send the output of the cluster-audit.log back to us.
 Step 2 : Evaluate Network Interconnect Bandwidth
 ------------------------------------------------
 Use the network test to validate network bandwidth.  This will take
-about two minutes or so to run and produce output so be
-patient.  Update the half1 and half2 arrays in the network-test.sh
-script to include the first and second half of the IP addresses of
-your cluster nodes.  Delete the exit command also.  Run:
+about two minutes or so to run and produce output so be patient.
+The script will use clush to collect the IP addresses of all the
+nodes and split the set in half, using first half as servers and
+the second half as clients.  The half1 and half2 arrays in the
+network-test.sh script can be manually defined as well.  There are
+command line options for sequential mode and to run iperf as well.
+Run:
 
     /root/cluster-validation/pre-install/network-test.sh | tee network-test.log
 on the node where clush has been installed and configured.
@@ -104,8 +107,13 @@ The test can be run in parallel on all nodes with:
 
 Current generation (2012+) 7200 rpm SATA drives can produce 
 100-145 MB/sec sequential read and write performance.
-For larger numbers of disks there is a summIOzone.sh script that can help
-provide a summary of disk-test.sh output.
+By default, the disk test only uses a 4GB data set size to finish
+quickly.  Consider using an additional larger size to measure
+streaming throughput more thoroughly.
+For large numbers of nodes and disks there is a summIOzone.sh script
+that can help provide a summary of disk-test.sh output using clush.
+
+    clush -ab /root/cluster-validation/pre-install/summIOzone.sh
 
 Complete Pre-Installation Checks
 --------------------------------
