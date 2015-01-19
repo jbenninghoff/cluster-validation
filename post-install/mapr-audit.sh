@@ -10,10 +10,11 @@ parg='-B -g all' # Assuming clush group 'all' is configured to reach all nodes
 [ $(id -u) -ne 0 ] && SUDO=sudo
 sep='====================================================================='
 #msg="what ever"; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-verbose=false
-while getopts ":v" opt; do
+verbose=false; terse=false
+while getopts ":vt" opt; do
   case $opt in
     v) verbose=true ;;
+    t) terse=true ;;
     \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
   esac
 done
@@ -32,6 +33,7 @@ echo zookeepers:
 ${node:-} ${SUDO:-} maprcli node listzookeepers; echo $sep
 echo MapR map and reduce slots
 ${node:-} ${SUDO:-} maprcli node list -columns hostname,cpus,ttmapSlots,ttReduceSlots; echo $sep
+[ "$terse" == "true" ] && exit
 echo MapR Volumes
 ${node:-} ${SUDO:-} maprcli volume list -columns numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
 echo MapR Storage Pools

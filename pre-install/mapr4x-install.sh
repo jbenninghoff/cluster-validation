@@ -1,35 +1,40 @@
 #!/bin/bash
 # jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
 
-# Variable settings
-clname='' #Set to cluster name
+clname='' #Set to a name for the entire cluster, no spaces
 admin1='' #Set to a non-root, non-mapr linux account which has a known password, this will be used to login to web ui
+node1=$(nodeset -I0 -e @dzk) #first node in dzk group
+export JAVA_HOME=/usr/java/default #Oracle JDK
+#export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 clargs='-o -qtt'
-#export JAVA_HOME=/usr/java/default
-export JAVA_HOME=/usr/lib/jvm/java
-tmpfile=$(mktemp); trap 'rm $tmpfile' 0 1 2 3 15
-node1=$(nodeset -I0 -e @zkcldb) #first node in zkcldb group
 [ $(id -u) -ne 0 ] && SUDO=sudo  #Use sudo, assuming account has passwordless sudo  (sudo -i)?
 
-# Pre-requisite checks
-grep ^all /etc/clustershell/groups || { echo clustershell group: all undefined; exit 1; }
-grep ^zkcldb /etc/clustershell/groups || { echo clustershell group: zkcldb undefined; exit 1; }
-grep ^rm /etc/clustershell/groups || { echo clustershell group: rm undefined; exit 1; }
-grep ^hist /etc/clustershell/groups || { echo clustershell group: rm undefined; exit 1; }
+grep ^dev /etc/clustershell/groups || { echo clustershell group: dev undefined; exit 1; }
+grep ^dcldb /etc/clustershell/groups || { echo clustershell group: dcldb undefined; exit 1; }
+grep ^dzk /etc/clustershell/groups || { echo clustershell group: dzk undefined; exit 1; }
+grep ^drm /etc/clustershell/groups || { echo clustershell group: drm undefined; exit 1; }
+grep ^dhist /etc/clustershell/groups || { echo clustershell group: rm undefined; exit 1; }
 [[ -z "${clname// /}" ]] && { echo Cluster name not set.  Set clname in this script; exit 2; }
 [[ -z "${node1// /}" ]] && { echo Primary node name not set.  Set or check node1 in this script; exit 2; }
-clush -S -aB 'grep -i mapr /etc/yum.repos.d/* | grep -v ^/etc/yum.repos.d/maprtech.repo' && { echo Unexpected MapR repos; exit 3; }
-clush -S -aB id $admin1 || { echo $admin1 does not exist on all nodes; exit 3; }
-clush -S -aB id mapr || { echo mapr user does not exist on all nodes; exit 3; }
-clush -S -aB "$JAVA_HOME/bin/java -version" || { echo $JAVA_HOME/bin/java does not exist on all nodes; exit 3; }
+clush -S -B -g dev id $admin1 || { echo $admin1 does not exist on all nodes; exit 3; }
+clush -S -B -g dev id mapr || { echo mapr does not exist on all nodes; exit 3; }
+clush -S -B -g dev "$JAVA_HOME/bin/java -version" || { echo $JAVA_HOME/bin/java does not exist on all nodes; exit 3; }
+clush -S -B -g dev 'grep -i mapr /etc/yum.repos.d/* | grep -v ^/etc/yum.repos.d/maprtech.repo' && { echo Unexpected MapR repos; exit 3; }
+clush -S -B -g dev 'grep -i -m1 epel /etc/yum.repos.d/*' || { echo EPEL repo not found; exit 3; }
 
-cat - << 'EOF'
-# Assumes all nodes have been audited with cluster-audit.sh and all issues fixed
-# Assumes all nodes have met subsystem performance expectations as measured by memory-test.sh, network-test.sh and disk-test.sh
+# Identify and format the data disks for MapR, destroys all data on all disks listed in /tmp/disk.list on all nodes
+echo;clush $clargs -B -g dev "${SUDO:-} lsblk -id | grep -o ^sd. | grep -v ^sda |sort|sed 's,^,/dev/,' | tee /tmp/disk.list; wc /tmp/disk.list"; echo
+
+cat - <<EOF
+Assuming all nodes have been audited with cluster-audit.sh and all issues fixed
+Assuming all nodes have met subsystem performance expectations as measured by memory-test.sh, network-test.sh and disk-test.sh
+Scrutinize the disk list above.  All disks will be formatted for MapR FS, destroying all existing data on the disks
+If the disk list contains an OS disk or disk not intended for MapR FS, edit this script to filter the output of lsblk
 EOF
+read -p "Press enter to continue or ctrl-c to abort"
 
 #Create 4.x repos on all nodes
-cat - <<EOF2 | clush -ab 'cat - > /etc/yum.repos.d/maprtech.repo'
+cat - <<EOF2 | clush -b -g dev 'cat - > /etc/yum.repos.d/maprtech.repo'
 [maprtech]
 name=MapR Technologies
 baseurl=http://package.mapr.com/releases/v4.0.1/redhat/
@@ -44,43 +49,40 @@ enabled=1
 gpgcheck=0
 protect=1
 EOF2
+clush $clargs -g dev 'rpm --import http://package.mapr.com/releases/pub/maprgpg.key'
+clush $clargs -g dev 'yum clean all'
 
-# Identify and format the data disks for MapR, destroys all data on all disks listed in /tmp/disk.list on all nodes
-clush $clargs -a "${SUDO:-} lsblk -id | grep -o ^sd. | grep -v ^sda |sort|sed 's,^,/dev/,' | tee /tmp/disk.list; wc /tmp/disk.list"
-echo Scrutinize the disk list above.  All disks will be formatted for MapR FS, destroying all existing data on the disks
-echo Once the disk list is acceptable, edit this script and remove or comment the exit statement below
-read -p "Press enter to continue or ctrl-c to abort"
-
-clush $clargs -a 'rpm --import http://package.mapr.com/releases/pub/maprgpg.key'
 # Install all servers with minimal rpms to provide storage and compute plus NFS
-clush $clargs -v -a "${SUDO:-} yum -y install mapr-fileserver mapr-nfs mapr-nodemanager"
+clush $clargs -v -g dev "${SUDO:-} yum -y install mapr-fileserver mapr-nfs mapr-nodemanager"
 
 # Service Layout option #1 ====================
-# Admin services layered over data nodes as defined in rm, hist and zkcldb groups
-clush $clargs -g zkcldb "${SUDO:-} yum -y install mapr-zookeeper" #3 Zookeeper nodes, fileserver, tt and nfs could be erased
-clush $clargs -g zkcldb "${SUDO:-} yum -y install mapr-cldb" # 3 CLDB nodes for HA, 1 does writes, all 3 do reads
-clush $clargs -g rm "${SUDO:-} yum -y install mapr-webserver mapr-metrics mapr-resourcemanager" # At least 2 RM nodes
-clush $clargs -g hist "${SUDO:-} yum -y install mapr-historyserver" #YARN history server
+# Admin services layered over data nodes defined in drm and dcldb groups
+clush $clargs -g dzk "${SUDO:-} yum -y install mapr-zookeeper" #3 Zookeeper nodes, fileserver, tt and nfs could be erased
+clush $clargs -g dcldb "${SUDO:-} yum -y install mapr-cldb" # 3 CLDB nodes for HA, 1 does writes, all 3 do reads
+clush $clargs -g drm "${SUDO:-} yum -y install mapr-webserver mapr-metrics mapr-resourcemanager" # At least 2 RM nodes
+clush $clargs -g dhist "${SUDO:-} yum -y install mapr-historyserver" #YARN history server
 
 # Service Layout option #2 ====================
 # Admin services on dedicated nodes, uncomment the line below
-#clush $clargs -g rm,zkcldb "${SUDO:-} yum -y erase mapr-nodemanager"
+#clush $clargs -g drm,dcldb "${SUDO:-} yum -y erase mapr-nodemanager"
 
-# Set JAVA_HOME
-# clush $clargs -a "${SUDO:-} sed -i 's,^#export JAVA_HOME=,export JAVA_HOME=/usr/lib/jvm/java-1.7.0-openjdk-1.7.0.55.x86_64,' /opt/mapr/conf/env.sh"
-clush $clargs -a "${SUDO:-} sed -i \"s,^#export JAVA_HOME=,export JAVA_HOME=$JAVA_HOME,\" /opt/mapr/conf/env.sh"
+# Check for correct java version and set JAVA_HOME
+# clush $clargs -g dev "${SUDO:-} sed -i 's,^#export JAVA_HOME=,export JAVA_HOME=/usr/lib/jvm/java-1.7.0-openjdk-1.7.0.55.x86_64,' /opt/mapr/conf/env.sh"
+clush $clargs -g dev "${SUDO:-} sed -i \"s,^#export JAVA_HOME=,export JAVA_HOME=$JAVA_HOME,\" /opt/mapr/conf/env.sh"
 
 # Configure ALL nodes with the CLDB and Zookeeper info (-N does not like spaces in the name)
-#clush $clargs -a "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zkcldb) -C $(nodeset -S, -e @zkcldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -e @hist) -F /tmp/disk.list -u mapr -g mapr"
-clush $clargs -a "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zkcldb) -C $(nodeset -S, -e @zkcldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -e @hist) -u mapr -g mapr -F /tmp/disk.list -disk-opts FW4"
-[ $? -ne 0 ] && { echo configure.sh failed, check screen for errors; exit 2; }
-echo Wait at least 2 minutes for system to initialize; sleep 120
+#clush $clargs -g dev "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @dcldb) -C $(nodeset -S, -e @dcldb) -RM $(nodeset -S, -e @drm) -HS $(nodeset -e @dhist) -F /tmp/disk.list -u mapr -g mapr"
+clush $clargs -g dev "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @dzk) -C $(nodeset -S, -e @dcldb) -RM $(nodeset -S, -e @drm) -HS $(nodeset -e @dhist) -u mapr -g mapr -F /tmp/disk.list -disk-opts FW5"
+[ $? -ne 0 ] && { echo configure.sh failed, check screen and /opt/mapr/logs for errors; exit 2; }
+#echo Waiting 2 minutes for system to initialize; sleep 120
+echo Waiting 2 minutes for system to initialize; end=$((SECONDS+120))
+sp='/-\|'; printf ' '; while [ $SECONDS -lt $end ]; do printf '\b%.1s' "$sp"; sp=${sp#?}${sp%???}; sleep .3; done # Spinner from StackOverflow
 
 ssh -qtt $node1 "${SUDO:-} maprcli node cldbmaster" && ssh $node1 "${SUDO:-} maprcli acl edit -type cluster -user $admin1:fc"
 [ $? -ne 0 ] && { echo CLDB did not startup, check status and logs on $node1; exit 3; }
 
 echo With a web browser, connect to one of the webservers to continue with license installation:
-echo Webserver nodes: $(nodeset -S, -e @rm)
+echo Webserver nodes: $(nodeset -S, -e @drm)
 echo
 echo Alternatively, license can be installed with maprcli like this:
 cat - << 'EOF2'
