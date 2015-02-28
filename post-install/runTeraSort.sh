@@ -1,14 +1,10 @@
 #!/bin/bash
 # jbenninghoff@maprtech.com 2013-Mar-8 vi: set ai et sw=3 tabstop=3:
 
-YARN="false"
+#MRV=$(maprcli cluster mapreduce get |tail -1 |awk '{print $1}')
+MRV=$(hadoop version | awk 'NR==1{printf("%1.1s\n",$2)}')
 
-MRV=$(maprcli cluster mapreduce get |tail -1 |awk '{print $1}')
-if [ "$MRV" == "yarn" ] ; then
-    YARN="true"
-fi
-
-if [ "$YARN" == "false" ] ; then # MRv1
+if [ "$MRV" == "1" ] ; then # MRv1
     nodes=$(maprcli node list -columns hostname,cpus,ttReduceSlots | awk '/^[1-9]/{if ($2>0) count++};END{print count}')
     ((rtasks=nodes*${1:-2})) # Start with 2 reduce tasks per node, reduce tasks per node limited by available RAM
     echo rtasks=$rtasks

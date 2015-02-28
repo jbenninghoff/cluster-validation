@@ -22,11 +22,11 @@ EOF1
 hive <<EOF2
 set hive.cli.print.header=true;
 set mapred.reduce.tasks=2;
-DROP TABLE IF EXISTS web_log;
-CREATE TABLE web_log(viewTime INT, userid BIGINT, url STRING, referrer STRING, ip STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
-LOAD DATA LOCAL INPATH "$tmpfile" INTO TABLE web_log;
-SELECT * FROM web_log;
-SELECT web_log.* FROM web_log WHERE web_log.url LIKE '%doc';
+DROP TABLE IF EXISTS mapr_web_log;
+CREATE TABLE mapr_web_log(viewTime INT, userid BIGINT, url STRING, referrer STRING, ip STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+LOAD DATA LOCAL INPATH "$tmpfile" INTO TABLE mapr_web_log;
+SELECT * FROM mapr_web_log;
+SELECT mapr_web_log.* FROM mapr_web_log WHERE mapr_web_log.url LIKE '%doc';
 quit;
 EOF2
 
