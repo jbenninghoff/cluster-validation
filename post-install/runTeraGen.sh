@@ -17,18 +17,20 @@ if [ "$MRV" == "1" ] ; then # MRv1
     -Dmapred.map.tasks=$mtasks \
     -Dmapred.map.tasks.speculative.execution=false \
     -Dmapred.reduce.tasks.speculative.execution=false \
-    $[10*1000*1000*1000] \
+    $[100*1000*1000] \
     /benchmarks/tera/in
 else # MRv2 Yarn
     hadoop fs -rm -r /benchmarks/tera/in
 
-    DISKS="`maprcli node list -columns hostname,cpus,service,disks |grep nodemanager | awk '/^[1-9]/{count+=$4}; END{print count}'`"
+    #DISKS="`maprcli node list -columns hostname,cpus,service,disks |grep nodemanager | awk '{count+=$2}; END{print count}'`"
+    DISKS=$(maprcli node list -columns service,disks |grep nodemanager | awk '{split($0,arr1); for (x in arr1) { if (match(arr1[x], /^[0-9]+$/) > 0) count+=arr1[x]}}; END{print count}')
+    ((DISKS=DISKS*${1:-1})); echo DISKS: $DISKS
 
     hadoop jar /opt/mapr/hadoop/hadoop-2.4.1/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.4.1-mapr-1408.jar teragen \
     -Dmapreduce.job.maps=$DISKS \
     -Dmapreduce.map.speculative=false \
     -Dmapreduce.reduce.speculative=false \
-    $[10*1000*1000*1000] \
+    $[1000*1000*1000] \
     /benchmarks/tera/in
    
    # or try: 3906 chunks / # nodes n, round to whole number i, then i * n
