@@ -65,7 +65,7 @@ for node in "${half2[@]}"; do
          #ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -w 16K > server-${half1[$i]}-iperf.log" & #16K socket buffer/window size MapR uses
          ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" &  #Small initial test, increase -t value for better test
        else
-         ssh -n $node "$scriptdir/rpctest -client 5000 ${half1[$i]} > server-${half1[$i]}-rpctest.log" & #Small initial test, increase 5000 by 10x or 50x
+         ssh -n $node "$scriptdir/rpctest -client -b 32 5000 ${half1[$i]} > server-${half1[$i]}-rpctest.log" & #Small initial test, increase 5000 by 10x or 50x
        fi
        ;;
      false) #Sequential mode can be used to help isolate NIC and cable issues versus switch overload issues
@@ -73,10 +73,10 @@ for node in "${half2[@]}"; do
          #ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -i3 -w 16K > server-${half1[$i]}-iperf.log" # 16K socket buffer/window size MapR uses
          ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 9 -i3 > server-${half1[$i]}-iperf.log" # Small initial test, increase -t value for better test
        else
-         ssh -n $node "$scriptdir/rpctest -client 5000 ${half1[$i]} > server-${half1[$i]}-rpctest.log"
+         ssh -n $node "$scriptdir/rpctest -client -b 32 5000 ${half1[$i]} > server-${half1[$i]}-rpctest.log"
        fi
-       ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs ethtool | grep -e ^Settings -e Speed:"
-       ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs ifconfig | grep errors"
+       ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ethtool | grep -e ^Settings -e Speed:"
+       ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ifconfig | grep errors"
        echo
        ;;
   esac
@@ -84,13 +84,13 @@ for node in "${half2[@]}"; do
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
 [ $concurrent == "true" ] && echo Clients have been launched
-[ $concurrent == "true" ] && wait $! 
+[ $concurrent == "true" ] && wait $!
 sleep 5
 
 tmp=${half2[@]}
 echo; [ $concurrent == "true" ] && echo Concurrent network throughput results || echo Sequential network throughput results
 if [ $runiperf == "true" ]; then
-   clush -w ${tmp// /,} grep -i -H -e ^ \*-iperf.log # Print the measured bandwidth (string TBD)
+   clush -b -w ${tmp// /,} grep -i -h -e ^ \*-iperf.log # Print the measured bandwidth (string TBD)
    clush -w ${tmp// /,} 'tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz *-iperf.log; rm *-iperf.log' # Tar up the log files
    tmp=${half1[@]}
    clush -w ${tmp// /,} pkill iperf #Kill the servers
@@ -103,6 +103,6 @@ fi
 
 # Unlike most Linux commands, option order is important for rpctest, -port must be used before other options
 #[root@rhel1 ~]# /opt/mapr/server/tools/rpctest --help
-#usage: rpctest [-port port (def:5555)]  -server
-#usage: rpctest [-port port (def:5555)]  -client mb-to-xfer (prefix - to fetch, + for bi-dir)  ip ip ip ... 
+#usage: rpctest [-port port (def:5555)] -server
+#usage: rpctest [-port port (def:5555)] -client mb-to-xfer (prefix - to fetch, + for bi-dir) ip ip ip ...
 
