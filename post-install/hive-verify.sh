@@ -3,12 +3,6 @@
 # Script to verify hive works for non-root, non-mapr user
 hadoop fs -ls || { echo Hive requires user directory, directory not found; exit 1; }
 #sudo hadoop fs -mkdir /user/$(id -un) && sudo hadoop fs -chown $(id -un):$(id -gn) /user/$(id -un)
-#sudo hadoop fs -mkdir /user/hive
-#sudo hadoop fs -chmod 0777 /user/hive
-#sudo hadoop fs -mkdir /user/hive/warehouse
-#sudo hadoop fs -chmod 1777 /user/hive/warehouse  #accessible to all but can only delete own files
-#sudo hadoop fs -mkdir /tmp
-#sudo hadoop fs -chmod 777 /tmp
 
 tmpfile=$(mktemp); trap 'rm $tmpfile' 0 1 2 3 15
 
