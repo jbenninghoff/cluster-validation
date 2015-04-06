@@ -50,7 +50,7 @@ fi
 echo Scrutinize this list carefully!!; exit #Comment out exit after list is vetted
 
 #read-only dd test, possible even after MFS is in place
-#for i in $disks; do dd of=/dev/null if=/dev/$i iflag=direct bs=1M count=1000 & done; exit
+#for i in $disks; do dd of=/dev/null if=$i iflag=direct bs=1M count=1000 & done; exit
 
 set -x
 for disk in $disks; do
