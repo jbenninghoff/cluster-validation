@@ -114,8 +114,8 @@ clush $parg2 "grep -h nproc /etc/security/limits.d/*nproc.conf"; echo $sep
 clush $parg2 "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -u'" ; echo $sep
 echo Check for mapr user open file limit
 clush $parg2 "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -n'" ; echo $sep
-echo Check for mapr user login and passwordless ssh (only for MapR v3.x)
+echo "Check for mapr user login and passwordless ssh (only for MapR v3.x)"
 clush $parg2 "echo 'mapr login for Hadoop '; getent passwd mapr || echo 'mapr user NOT found!'"
 clush $parg2 "echo 'mapr login for Hadoop '; getent passwd mapr && { ${SUDO:-} echo ~mapr/.ssh; ${SUDO:-} ls ~mapr/.ssh; }"; echo $sep
-echo Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)
+echo "Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)"
 clush $parg2 "echo 'Root login '; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }"; echo $sep
