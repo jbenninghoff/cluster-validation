@@ -1,12 +1,12 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Oct-06  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Oct-06  vi: set ai et sw=3 tabstop=3:
 
 # A sequence of parallel shell commands looking for system configuration
-# differences between all the nodes in a cluster.
+# differences between the nodes in a cluster.
 #
-# The script requires that the clush utility (a parallel execution tool)
+# The script requires that the clush utility (a parallel execution shell)
 # be installed and configured for passwordless ssh connectivity to
-# all the nodes under test.
+# all the nodes under test.  Or passwordless sudo for a non-root account.
 
 sep='====================================================================='
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)"
@@ -14,7 +14,7 @@ distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e 
 [ $(id -u) -ne 0 ] && SUDO=sudo
 shopt -s nocasematch
 
-# Arguments to pass in to our clush execution
+# Common arguments to pass in to clush execution
 clcnt=$(nodeset -c @all)
 parg="-B -a -f $clcnt"
 parg2="$parg -o -qtt"
@@ -55,6 +55,8 @@ case $distro in
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
+clush $parg2 'for each in  /sys/block/sd*/queue/max_hw_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg2 'for each in  /sys/block/sd*/queue/max_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
 clush $parg -u 30 "df -hT | cut -c23-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep mapper"
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep -v mapper"
@@ -65,7 +67,7 @@ clush $parg "cat /etc/*release | uniq"; echo $sep
 clush $parg "uname -srvm | fmt"; echo $sep
 clush $parg date; echo $sep
 clush $parg2 "${SUDO:-} sysctl vm.swappiness net.ipv4.tcp_retries2 vm.overcommit_memory"; echo $sep
-echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 0\nnet.ipv4.tcp_retries2 = 2\nvm.overcommit_memory = 0"
+echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 0\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"
 echo $sep
 
 case $distro in
@@ -105,7 +107,15 @@ echo DNS lookup
 clush $parg 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup
 clush $parg 'host $(hostname -i)'; echo $sep
+echo Check for existing MapR install
 clush $parg "ls -d /opt/mapr/* | head" ; echo $sep
+echo Check for nproc limit
+clush $parg2 "grep -h nproc /etc/security/limits.d/*nproc.conf"; echo $sep
+clush $parg2 "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -u'" ; echo $sep
+echo Check for mapr user open file limit
 clush $parg2 "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -n'" ; echo $sep
+echo Check for mapr user login and passwordless ssh (only for MapR v3.x)
+clush $parg2 "echo 'mapr login for Hadoop '; getent passwd mapr || echo 'mapr user NOT found!'"
 clush $parg2 "echo 'mapr login for Hadoop '; getent passwd mapr && { ${SUDO:-} echo ~mapr/.ssh; ${SUDO:-} ls ~mapr/.ssh; }"; echo $sep
+echo Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)
 clush $parg2 "echo 'Root login '; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }"; echo $sep

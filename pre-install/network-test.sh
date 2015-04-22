@@ -90,7 +90,7 @@ sleep 5
 tmp=${half2[@]}
 echo; [ $concurrent == "true" ] && echo Concurrent network throughput results || echo Sequential network throughput results
 if [ $runiperf == "true" ]; then
-   clush -b -w ${tmp// /,} grep -i -h -e ^ \*-iperf.log # Print the measured bandwidth (string TBD)
+   clush -w ${tmp// /,} grep -i -h -e ^ \*-iperf.log # Print the measured bandwidth (string TBD)
    clush -w ${tmp// /,} 'tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz *-iperf.log; rm *-iperf.log' # Tar up the log files
    tmp=${half1[@]}
    clush -w ${tmp// /,} pkill iperf #Kill the servers

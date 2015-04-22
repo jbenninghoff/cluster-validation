@@ -34,7 +34,7 @@ EOF
 read -p "Press enter to continue or ctrl-c to abort"
 
 #Create 4.x repos on all nodes
-cat - <<EOF2 | clush -b -g dev 'cat - > /etc/yum.repos.d/maprtech.repo'
+cat - <<EOF2 | clush -b -g dev "${SUDO:-} tee /etc/yum.repos.d/maprtech.repo >/dev/null"
 [maprtech]
 name=MapR Technologies
 baseurl=http://package.mapr.com/releases/v4.0.1/redhat/
