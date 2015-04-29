@@ -5,6 +5,7 @@
 
 yum -y install mapr-hive mapr-hivemetastore mapr-hiveserver2 mapr-pig
 ln -s /opt/mapr/lib/mysql-connector-java-5.*-bin.jar /opt/mapr/hive/hive-0.13/lib/
+chmod 755 /opt/mapr/lib/mysql-connector-java-5.*-bin.jar
 #yum -y install mysql-connector-java
 
 

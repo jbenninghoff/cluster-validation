@@ -16,7 +16,7 @@ shopt -s nocasematch
 
 # Common arguments to pass in to clush execution
 clcnt=$(nodeset -c @all)
-parg="-B -a -f $clcnt"
+parg="-B -a -f $clcnt" #fanout set to cluster node count
 parg2="$parg -o -qtt"
 
 echo ==================== Hardware audits ================================
@@ -55,9 +55,6 @@ case $distro in
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
-clush $parg2 'for each in  /sys/block/sd*/queue/max_hw_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
-clush $parg2 'for each in  /sys/block/sd*/queue/max_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
-clush $parg -u 30 "df -hT | cut -c23-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep mapper"
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep -v mapper"
 
@@ -98,8 +95,13 @@ shopt -u nocasematch
 
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
 clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
+clush $parg2 'for each in  /sys/block/sd*/queue/max_hw_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg2 'for each in  /sys/block/sd*/queue/max_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg -u 30 "df -hT | cut -c23-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
+echo Check for nosuid mounts
+clush $parg -u 30 "mount | grep nosuid"; echo $sep
 clush $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" ; echo $sep
-clush $parg 'java -version; echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
+clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
 clush $parg 'java -XX:+PrintFlagsFinal -version |& grep MaxHeapSize'; echo $sep
 echo Hostname lookup
 clush $parg 'hostname -I'; echo $sep
@@ -114,6 +116,8 @@ clush $parg2 "grep -h nproc /etc/security/limits.d/*nproc.conf"; echo $sep
 clush $parg2 "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -u'" ; echo $sep
 echo Check for mapr user open file limit
 clush $parg2 "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -n'" ; echo $sep
+echo Check for mapr users java exec permission and version
+clush $parg2 "echo -n 'Jave version: '; ${SUDO:-} su - mapr -c 'java -version'"; echo $sep
 echo "Check for mapr user login and passwordless ssh (only for MapR v3.x)"
 clush $parg2 "echo 'mapr login for Hadoop '; getent passwd mapr || echo 'mapr user NOT found!'"
 clush $parg2 "echo 'mapr login for Hadoop '; getent passwd mapr && { ${SUDO:-} echo ~mapr/.ssh; ${SUDO:-} ls ~mapr/.ssh; }"; echo $sep

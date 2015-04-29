@@ -8,11 +8,15 @@
 # <name>mapred.tasktracker.reduce.tasks.maximum</name> <value>CPUS/2</value> 
 
 # Remove and recreate a MapR volume just for benchmarking, best if run only once
-maprcli volume unmount -name benchmarks
-maprcli volume remove -name benchmarks
-sleep 2
-
-maprcli volume create -name benchmarks -path /benchmarks -replication 1 # use -topology /data... if desired
-#hadoop mfs -setcompression off /benchmarks #compression may help but not allowed by sortbenchmark.org
-#hadoop mfs -setchunksize $[512*1024*1024] /benchmarks  #default 256MB, optimal chunksize determined by cluster size
+# Use replication 1 to get peak write performance
+if maprcli volume info -name benchmarks > /dev/null; then #If benchmarks volume exists
+   maprcli volume unmount -name benchmarks
+   maprcli volume remove -name benchmarks
+   sleep 2
+   hadoop fs -stat /benchmarks #Check if folder exists
+   maprcli volume create -name benchmarks -path /benchmarks -replication 1 # use -topology /data... if desired
+   hadoop fs -chmod 777 /benchmarks #Check if folder exists
+   #hadoop mfs -setcompression off /benchmarks #compression may help but not allowed by sortbenchmark.org
+   #hadoop mfs -setchunksize $[512*1024*1024] /benchmarks  #default 256MB, optimal chunksize determined by cluster size
+fi
 
