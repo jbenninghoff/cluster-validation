@@ -111,6 +111,9 @@ echo Reverse DNS lookup
 clush $parg 'host $(hostname -i)'; echo $sep
 echo Check for existing MapR install
 clush $parg "ls -d /opt/mapr/* | head" ; echo $sep
+echo Check for root ownership of /opt/mapr  
+clush $parg 'ls -ld $(readlink -f /opt/mapr)'
+clush $parg 'ls -ld $(readlink -f /opt/mapr) | awk "\$3!=\"root\" || \$4!=\"root\" {print \"/opt/mapr not owned by root:root!!\"}"'
 echo Check for nproc limit
 clush $parg2 "grep -h nproc /etc/security/limits.d/*nproc.conf"; echo $sep
 clush $parg2 "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -u'" ; echo $sep

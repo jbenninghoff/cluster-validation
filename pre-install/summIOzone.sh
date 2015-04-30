@@ -32,6 +32,7 @@ cat sd*iozone.log | gawk '
      printf "%-7s %6d\n", "min:", swmin
      printf "%-7s %6d\n", "max:", swmax
      printf "%-7s %6d\n", "mean:", swavg
+     printf "%-7s %6d\n", "aggregate:", swtotal
      for (val in swvals) {
        svals += (swvals[val] - swavg) ** 2
      }
@@ -44,6 +45,7 @@ cat sd*iozone.log | gawk '
      printf "%-7s %6d\n", "min:", srmin
      printf "%-7s %6d\n", "max:", srmax
      printf "%-7s %6d\n", "mean:", sravg
+     printf "%-7s %6d\n", "aggregate:", srtotal
      for (val in srvals) {
        svals += (srvals[val] - sravg) ** 2
      }
@@ -56,6 +58,7 @@ cat sd*iozone.log | gawk '
      printf "%-7s %6d\n", "min:", rwmin
      printf "%-7s %6d\n", "max:", rwmax
      printf "%-7s %6d\n", "mean:", rwavg
+     printf "%-7s %6d\n", "aggregate:", rwtotal
      for (val in rwvals) {
        svals += (rwvals[val] - rwavg) ** 2
      }
@@ -68,6 +71,7 @@ cat sd*iozone.log | gawk '
      printf "%-7s %6d\n", "min:", rrmin
      printf "%-7s %6d\n", "max:", rrmax
      printf "%-7s %6d\n", "mean:", rravg
+     printf "%-7s %6d\n", "aggregate:", rrtotal
      for (val in rrvals) {
        svals += (rrvals[val] - rravg) ** 2
      }

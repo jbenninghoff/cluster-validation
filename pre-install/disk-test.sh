@@ -67,8 +67,8 @@ exit #Comment out exit after list is vetted
 set -x
 for disk in $disks; do
    iozlog=`basename $disk`-iozone.log
-   $abspath/iozone -I -r 1M -s 4G -+n -i 0 -i 1 -i 2 -f $disk > $iozlog  &
-   sleep 3 #Some controllers seem to lockup without a sleep
+   $abspath/iozone -I -r 1M -s 4G -+n -i 0 -i 1 -i 2 -f $disk > $iozlog  & #remove ampersand to run sequential test on drives
+   sleep 2 #Some controllers seem to lockup without a delay
 done
 set +x
 
