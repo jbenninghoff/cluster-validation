@@ -5,9 +5,9 @@ if [ "$?" != "0" ] ; then
         cat <<EOF >> /etc/clustershell/groups
 
 ## AUTOGEN-HIVE ##
-mysql: mapr2
-hivemeta: mapr2
-hs2: mapr2
+mysql: <mysql node hostname>
+hivemeta: <hive metastore hostname>
+hs2: <hiveserver2 hostname>
 EOF
 fi
 
