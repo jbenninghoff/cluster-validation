@@ -1,4 +1,6 @@
 !/bin/bash
+# nestrada@maprtech.com 2015-May-1
+
 # Configure clush groups
 grep '## AUTOGEN-HIVE ##' /etc/clustershell/groups >/dev/null 2>&1
 if [ "$?" != "0" ] ; then
