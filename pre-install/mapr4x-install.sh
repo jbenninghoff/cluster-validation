@@ -3,6 +3,7 @@
 
 clname='' #Set to a name for the entire cluster, no spaces
 admin1='' #Set to a non-root, non-mapr linux account which has a known password, this will be used to login to web ui
+mapruid=mapr; maprgid=mapr
 spwidth=4
 node1=$(nodeset -I0 -e @dzk) #first node in dzk group
 export JAVA_HOME=/usr/java/default #Oracle JDK
@@ -19,7 +20,7 @@ grep ^dhist /etc/clustershell/groups || { echo clustershell group: rm undefined;
 [[ -z "${node1// /}" ]] && { echo Primary node name not set.  Set or check node1 in this script; exit 2; }
 clush -S -B -g dev id $admin1 || { echo $admin1 account does not exist on all nodes; exit 3; }
 clush -S -B -g dev id mapr || { echo mapr account does not exist on all nodes; exit 3; }
-clush -S -B -g dev "$JAVA_HOME/bin/java -version" || { echo $JAVA_HOME/bin/java does not exist on all nodes; exit 3; }
+clush -S -B -g dev "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" || { echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit; exit 3; }
 clush -S -B -g dev 'grep -i mapr /etc/yum.repos.d/*' || { echo MapR repos not found; exit 3; }
 clush -S -B -g dev 'grep -i -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
 

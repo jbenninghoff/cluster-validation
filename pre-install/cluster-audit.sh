@@ -98,9 +98,11 @@ clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_
 clush $parg2 'for each in  /sys/block/sd*/queue/max_hw_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
 clush $parg2 'for each in  /sys/block/sd*/queue/max_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
 clush $parg -u 30 "df -hT | cut -c23-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
-echo Check for nosuid mounts
+echo Check for nosuid mounts #TBD add noexec check
 clush $parg -u 30 "mount | grep nosuid"; echo $sep
+echo Check for /tmp permission and tmpwatch on NM local dir
 clush $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" ; echo $sep
+clush $parg "grep /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch"; echo $sep
 clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
 clush $parg 'java -XX:+PrintFlagsFinal -version |& grep MaxHeapSize'; echo $sep
 echo Hostname lookup
