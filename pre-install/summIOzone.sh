@@ -1,8 +1,9 @@
 #!/bin/bash
 # script which summarizes iozone results on a set of disks
 # iozone results presummed to be in current folder in .log files
+# updated to work with AWS
 
-cat sd*iozone.log | gawk '
+cat *-iozone.log | gawk '
    BEGIN {
      swmin=6000000; srmin=swmin; rrmin=swmin; rwmin=swmin
    }
