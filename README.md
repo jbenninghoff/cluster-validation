@@ -94,12 +94,14 @@ can deliver ~40GB/sec Triad results.
 
 Step 4 : Evaluate Raw Disk Performance
 --------------------------------------
-Use the iozone benchmark to test disk performance.  This process 
+Use the iozone benchmark to test disk performance. This process 
 is destructive to disks that are tested, so make sure that 
-sure that you have not installed MapR nor have any needed data on
-those spindles.  The script as shipped will ONLY list out the 
-disks to be tested.   You MUST edit the script once you have
-verified that the list of spindles to test is correct.
+you have not installed MapR nor have any needed data on those 
+spindles. The script as shipped will ONLY list out the disks to
+be tested. When run with no arguments, this script outputs a 
+list of unused disks.  After carefully examining this list, run 
+again with --destroy as the argument ('disk-test.sh --destroy') 
+to run the destructive IOzone tests on all unused disks.
 
 The test can be run in parallel on all nodes with:
 
