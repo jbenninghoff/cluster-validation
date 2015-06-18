@@ -29,7 +29,7 @@ if [ $YARN = "true" ] ; then
    HHOME=$(ls -d /opt/mapr/hadoop/hadoop-2*)
    HVER=${HHOME#*/hadoop-}
    TJAR=$(ls $HHOME/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-$HVER-*-tests.jar)
-   tdisks=$(maprcli dashboard info -json | grep total_disks| grep -o '[0-9][0-9]*')
+   tdisks=$(maprcli dashboard info -json | grep total_disks| egrep -o '[0-9]+(\.)([0-9]+)?' | awk '{print int($1+0.5)}')
 
       # Use "mapreduce" properties to force <N> containers per available disk
       # Default is 2 (so map.disk=0.5 and nrFiles is mtasks*2 )
