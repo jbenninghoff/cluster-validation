@@ -16,13 +16,13 @@ shopt -s nocasematch
 
 # Common arguments to pass in to clush execution
 clcnt=$(nodeset -c @all)
-parg="-B -a -f $clcnt" #fanout set to cluster node count
+parg="-b -a -f $clcnt" #fanout set to cluster node count
 parg2="$parg -o -qtt"
 
 echo ==================== Hardware audits ================================
 date; echo $sep
 # probe for system info ###############
-clush $parg2 "${SUDO:-} dmidecode | grep -A2 '^System Information'"; echo $sep
+clush $parg2 "${SUDO:-} dmidecode | grep -A2 '^System Information'" 2> /dev/null; echo $sep
 clush $parg2 "${SUDO:-} dmidecode | grep -A3 '^BIOS I'"; echo $sep
 
 # probe for cpu info ###############
