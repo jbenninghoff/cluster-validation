@@ -5,27 +5,33 @@
 
 hostname=$(hostname)
 clustername=$(awk 'NR==1{print $1}' /opt/mapr/conf/mapr-clusters.conf)
-zookeepers=$(maprcli node listzookeepers | sed -n 2p)
+zookeepers=$(maprcli node listzookeepers | sed -n '2s/ *$//p')
 pkg=solr-4.4.0.tgz
-installdir=/apps/solr/solr-4.4.0/DSsolr
-installdir=/apps/solr/solr-4.4.0
+#installdir=/apps/solr/solr-4.4.0 # Use Linux FS
+installdir=/mapr/$clustername/apps/solr
+if [ ! -d "$installdir" ]; then
+   echo Creating Solr4 volume
+   maprcli volume create -name solr4-vol -path /${installdir#/*/*/} -createparent true -replication 3 #Use MapR FS via NFS as install dir
+fi
+installdir=$installdir/$hostname; mkdir -p $installdir
 
 #Download Solr 4.4 tarball and place in /mapr/$clustername/tmp/
 #curl "http://mirror.cogentco.com/pub/apache/lucene/solr/4.4.0/$pkg" -o /mapr/$clustername/tmp/
 [ -f /mapr/$clustername/tmp/$pkg ] || { echo $pkg package not found; exit 1; }
 
-#maprcli volume create -name localvol-$hostname -path /apps/solr/localvol-$hostname -createparent true -localvolumehost $hostname -replication 3 
-#cd /mapr/$clustername/apps/solr/localvol-$hostname; tar xzf /mapr/$clustername/tmp/$pkg
-cd /apps/solr; tar xzf /mapr/$clustername/tmp/$pkg
-
+echo Extracting Solr4 package
+cd $installdir; tar xzf /mapr/$clustername/tmp/$pkg
 #create default collection
-cd $installdir; cp -a example mycollection
+cd $installdir/solr*; installdir=$PWD; cp -a example mycollection; chown -R mapr:mapr mycollection
 
 #bootstrap command if first host
-echo java -DnumShards=3 -Dbootstrap_confdir=$installdir/mycollection/solr/collection1/conf -Dcollection.configName=mycollection1 -DzkHost=$zookeepers/solr  -jar $installdir//mycollection/start.jar 
+echo Run this boot strap command if and only if this is the first host installed with Solr 4.x
+echo "Use control-c when command has finished sending output and this string is visibile: (live nodes size: 1)"
+echo su mapr -c \"java -DnumShards=3 -Dbootstrap_confdir=$installdir/mycollection/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/mycollection/start.jar \"
+echo
 
 #make solr4 init script
-cat - <<EOF > /etc/init.d/solr4
+cat - <<"EOF" > /etc/init.d/solr4
 #!/bin/sh
 ### BEGIN INIT INFO
 # Provides:
@@ -37,9 +43,10 @@ cat - <<EOF > /etc/init.d/solr4
 # Description:       Control Apache Solr v4.x as an init.d service
 ### END INIT INFO
 
-dir="$installdir/mycollection"
-user="root"
-cmd="java -Dsolr.solr.home=$installdir/mycollection/solr -DzkHost=$zookeepers/solr -jar $installdir/mycollection/start.jar"
+dir=installdir
+user="mapr"
+#cmd="java -Dsolr.solr.home=$dir/solr -DzkHost=$zookeepers/solr -jar $dir/start.jar"
+cmd="java -DzkHost=$zookeepers/solr -jar $dir/start.jar"
 
 name=`basename $0`
 pid_file="/var/run/$name.pid"
@@ -64,10 +71,9 @@ case "$1" in
     else
         echo "Starting $name"
         cd "$dir"
-        $cmd > "$stdout_log" 2> "$stderr_log" &
+        runuser -c "$cmd" $user > "$stdout_log" 2> "$stderr_log" &
+#        $cmd > "$stdout_log" 2> "$stderr_log" &
 #        daemon --user $user $cmd > "$stdout_log" 2> "$stderr_log" &
-#        sudo -u "$user" $cmd > "$stdout_log" 2> "$stderr_log" &
-#        su -c "$cmd" - $user >> "$stdout_log" 2>> "$stderr_log" &
         echo $! > "$pid_file"; sleep 2
         if ! is_running; then
             echo "Unable to start, see $stdout_log and $stderr_log"
@@ -114,6 +120,7 @@ case "$1" in
     status)
     if is_running; then
         echo "Running"
+        lsof -i :8983
     else
         echo "Stopped"
         exit 1
@@ -128,6 +135,13 @@ esac
 exit 0
 EOF
 
+sed -i "s,dir=installdir,dir=$installdir/mycollection," /etc/init.d/solr4
+sed -i "s/\$zookeepers/$zookeepers/" /etc/init.d/solr4
+chmod 744 /etc/init.d/solr4
+
+chkconfig --add solr4
 chkconfig solr4 on
+
+echo Use these commands to start Solr4.x manually or check status
 echo service solr4 start
 echo service solr4 status
