@@ -66,37 +66,28 @@ while getopts "$optspec" optchar; do
     case "${optchar}" in
         -)
             case "${OPTARG}" in
-                allDisks)
-			ALLDISKS=true
-                    ;;
-                unusedDisks)
-			DISKS=true
-		    ;;
-                destroy)
-			DESTROY=true
-		    ;;
+                allDisks) ALLDISKS=true ;;
+                unusedDisks) DISKS=true ;;
+                destroy) DESTROY=true ;;
                 *)
-                    echo "Invalid option --${OPTARG}" >&2
-		    echo "Please run script either with --allDisks, --destroy, or no arguments"
-                    ;;
+                   echo "Invalid option --${OPTARG}" >&2
+                   echo "Please run script either with --allDisks, --destroy, or no arguments"
+                   ;;
             esac;;
-        a)
-		ALLDISKS=true
-            ;;
+        a) ALLDISKS=true ;;
         *)
-            echo "Invalid option -${OPTARG}" >&2
-	    echo "Please run script either with --allDisks, --destroy, or no arguments"
-            ;;
+          echo "Invalid option -${OPTARG}" >&2
+          echo "Please run script either with --allDisks, --destroy, or no arguments"
+          ;;
     esac
 done
 
 # Based on the getops loop one of the below will be executed.
 
 if [ "$ALLDISKS" == true ]; then
- disks=$(fdisk -l 2>/dev/null | grep -e "^Disk .* bytes$" | awk '{print $2}' | sed 's/://' |sort)
+   disks=$(fdisk -l 2>/dev/null | grep -e "^Disk .* bytes$" | awk '{print $2}' | sed 's/://' |sort)
 	#disks=$(lsblk -id | grep -o ^sd. | grep -v ^sda |sort)
    echo -e "All disks: " $disks
-	#echo -e "All disks: \n$(fdisk -l 2>/dev/null | grep -e '^Disk .* bytes$' | awk '{print $2}' |sort)"
 	echo " "
 	exit 0
 fi
@@ -109,27 +100,26 @@ if (( diskqty > 48 )); then # See /opt/mapr/conf/mfs.conf: mfs.max.disks
 fi
 
 if [ "$DISKS" == true ]; then
-	echo " "
-    	echo "Unused disks: $disks"
-    	echo Scrutinize this list carefully!!
-    	echo $disks | tr ' ' '\n' > /tmp/disk.list # write disk list to file for MapR install
-    	echo " "
-    	exit 0
+   echo " "
+   echo "Unused disks: $disks"
+   echo Scrutinize this list carefully!!
+   echo $disks | tr ' ' '\n' > /tmp/disk.list # write disk list to file for MapR install
+   echo " "
+   exit 0
 fi
 
 if [ "$DESTROY" == true ]; then
 	echo " "
 	set -x
-	# for disk in `cat /tmp/disks.list`; do
-        for disk in $disks; do
-             iozlog=`basename $disk`-iozone.log
-             $abspath/iozone -I -r 1M -s 4G -+n -i 0 -i 1 -i 2 -f $disk > $iozlog  & #remove ampersand to run sequential test on drives
-             sleep 2 #Some controllers seem to lockup without a delay
-        done
-        set +x
-        echo " "
-        echo "Waiting for all iozone to finish"
-        wait
-	      echo " "
-    	exit 0
+   for disk in $disks; do
+      iozlog=`basename $disk`-iozone.log
+      $abspath/iozone -I -r 1M -s 4G -+n -i 0 -i 1 -i 2 -f $disk > $iozlog  & #remove ampersand to run sequential test on drives
+      sleep 2 #Some controllers seem to lockup without a delay
+   done
+   set +x
+   echo " "
+   echo "Waiting for all iozone to finish"
+   wait
+   echo " "
+   exit 0
 fi
