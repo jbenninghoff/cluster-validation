@@ -30,15 +30,15 @@ cat *-iozone.log | gawk '
    }
 
    END {
-     printf "%-7s %6d\n", "File size:", fsize
+     printf "%-7s %1.2f%s\n", "File size:", fsize/(1024*1024), "GB"
      printf "%-7s %6d\n", "Disk count:", count
      print ""
      print "IOzone Sequential Write Summary(KB/sec)"
      swavg = swtotal/count
+     printf "%-7s %1.2f%s\n", "aggregate:", swtotal/(1024*1024), "GB/sec"
+     printf "%-7s %6d\n", "mean:", swavg
      printf "%-7s %6d\n", "min:", swmin
      printf "%-7s %6d\n", "max:", swmax
-     printf "%-7s %6d\n", "mean:", swavg
-     printf "%-7s %6d\n", "aggregate:", swtotal
      for (val in swvals) {
        svals += (swvals[val] - swavg) ** 2
      }
@@ -48,10 +48,10 @@ cat *-iozone.log | gawk '
 
      print "IOzone Sequential Read Summary(KB/sec)"
      sravg = srtotal/count
+     printf "%-7s %1.2f%s\n", "aggregate:", srtotal/(1024*1024), "GB/sec"
+     printf "%-7s %6d\n", "mean:", sravg
      printf "%-7s %6d\n", "min:", srmin
      printf "%-7s %6d\n", "max:", srmax
-     printf "%-7s %6d\n", "mean:", sravg
-     printf "%-7s %6d\n", "aggregate:", srtotal
      for (val in srvals) {
        svals += (srvals[val] - sravg) ** 2
      }
@@ -61,10 +61,10 @@ cat *-iozone.log | gawk '
 
      print "IOzone Random Write Summary(KB/sec)"
      rwavg = rwtotal/count
+     printf "%-7s %1.2f%s\n", "aggregate:", rwtotal/(1024*1024), "GB/sec"
+     printf "%-7s %6d\n", "mean:", rwavg
      printf "%-7s %6d\n", "min:", rwmin
      printf "%-7s %6d\n", "max:", rwmax
-     printf "%-7s %6d\n", "mean:", rwavg
-     printf "%-7s %6d\n", "aggregate:", rwtotal
      for (val in rwvals) {
        svals += (rwvals[val] - rwavg) ** 2
      }
@@ -74,10 +74,10 @@ cat *-iozone.log | gawk '
 
      print "IOzone Random Read Summary(KB/sec)"
      rravg = rrtotal/count
+     printf "%-7s %1.2f%s\n", "aggregate:", rrtotal/(1024*1024), "GB/sec"
+     printf "%-7s %6d\n", "mean:", rravg
      printf "%-7s %6d\n", "min:", rrmin
      printf "%-7s %6d\n", "max:", rrmax
-     printf "%-7s %6d\n", "mean:", rravg
-     printf "%-7s %6d\n", "aggregate:", rrtotal
      for (val in rrvals) {
        svals += (rrvals[val] - rravg) ** 2
      }
