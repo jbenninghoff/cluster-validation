@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 # nestrada 2015-May-1
 
 [ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }

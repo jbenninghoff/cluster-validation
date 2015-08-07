@@ -3,36 +3,74 @@
 
 [ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
 
+#Download Solr 4.4 tarball
+#curl "http://mirror.cogentco.com/pub/apache/lucene/solr/4.4.0/solr-4.4.0.tgz" -o /tmp/
+pkg=/tmp/solr-4.4.0.tgz #Full path to Solr package
+[ -f $pkg ] || { echo $pkg package not found; exit 1; }
+
+serviceacct=${1:-mapr} #Default service account is mapr but alternate account can be provided as arg
 hostname=$(hostname -s)
 clustername=$(awk 'NR==1{print $1}' /opt/mapr/conf/mapr-clusters.conf)
-zookeepers=$(maprcli node listzookeepers | sed -n '2s/ *$//p')
-pkg=solr-4.4.0.tgz
+zookeepers=$(su mapr -c "maprcli node listzookeepers | sed -n '2s/ *$//p'")
 instance=wf-instance
+bootstrap=$(hadoop fs -stat /apps/solr &>/dev/null && echo false || echo true) #If maprfs:/apps/solr does not exist, bootstrap
 #installdir=/apps/solr/solr-4.4.0 # Use Linux FS
 installdir=/mapr/$clustername/apps/solr #Use MapR FS via NFS as install dir
-if [ ! -d "$installdir" ]; then
-   echo Creating Solr4 volume
-   maprcli volume create -name solr4-vol -path /${installdir#/*/*/} -createparent true -replication 3 #Create Solr4 volume
-fi
-installdir=$installdir/$hostname; mkdir -p $installdir
-
-#Download Solr 4.4 tarball and place in /mapr/$clustername/tmp/
-#curl "http://mirror.cogentco.com/pub/apache/lucene/solr/4.4.0/$pkg" -o /mapr/$clustername/tmp/
-[ -f /mapr/$clustername/tmp/$pkg ] || { echo $pkg package not found; exit 1; }
+case $installdir in
+   /mapr/*)
+      if [ ! -d "$installdir" ]; then
+         echo Creating Solr4 volume
+         maprcli volume create -name solr4-vol -path /${installdir#/*/*/} -createparent true -replication 3 #Create Solr4 volume
+      fi
+      installdir=$installdir/$hostname; mkdir -p $installdir
+      ;;
+   *)
+      mkdir -p $installdir
+      ;;
+esac
 
 echo Extracting Solr4 package
-cd $installdir; tar xzf /mapr/$clustername/tmp/$pkg
+cd $installdir; tar xzf $pkg
 #create default collection
 cd $installdir/solr*; installdir=$PWD; cp -a example $instance; chown -R mapr:mapr $instance
+cd $installdir/$instance #bootstrap must be run from here
 
-#bootstrap command if first host
-echo Run the following boot strap command if and only if this is the first host installed with Solr 4.x
-echo "Use control-c when command has finished sending output and this string is visibile: (live nodes size: 1)"
-echo su mapr -c \"java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar \"
-echo
+if [ "$bootstrap" == "true" ]; then
+   echo "Use control-c when command has finished sending output and this string is visibile: (live nodes size: 1)"
+   su mapr -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar\"
+   cat - <<-"EOF2" > /usr/local/bin/solr4-add-collection.sh
+		#! /bin/bash
+		
+		if [ $# != 2 ]; then
+		   echo "Usage: $0 collection-name number-of-shards"
+		   echo "collection-name will be created in installdir/instance/solr/collection-name and loaded into Zookeeper"
+		   exit 1
+		fi
+		
+		collection=$1
+		nshards=${2:-3}
+		
+		cp -a installdir/instance/solr/collection1/ installdir/instance/solr/$collection
+		sed -i 's/collection1/collection2/' installdir/instance/solr/$collection/core.properties
+		installdir/instance/cloud-scripts/zkcli.sh -zkhost zookeepers/solr -cmd upconfig -confdir installdir/instance/solr/$collection/conf -confname ${collection}Conf
+		
+		sleep 30
+		
+		curl "localhost:8983/solr/admin/collections?action=CREATE&name=${collection}&numShards=${nshards}&replicationFactor=1&collection.configName=${collection}Conf"
+	EOF2
+
+   sed -i "s,installdir,$installdir,g" /usr/local/bin/solr4-add-collection.sh
+   sed -i "s,instance,$instance,g" /usr/local/bin/solr4-add-collection.sh
+   sed -i "s/zookeepers/$zookeepers/g" /usr/local/bin/solr4-add-collection.sh
+   chmod 744 /usr/local/bin/solr4-add-collection.sh
+
+   echo Use /usr/local/bin/solr4-add-collection.sh to add additional document collections to Solr
+fi
 
 #make solr4 init script
-cat - <<"EOF" > /etc/init.d/solr4
+solr4init=/etc/init.d/solr4
+solr4init=/usr/local/bin/solr4
+cat - <<"EOF" > $solr4init
 #!/bin/sh
 ### BEGIN INIT INFO
 # Provides:
@@ -136,41 +174,14 @@ esac
 exit 0
 EOF
 
-sed -i "s,dir=installdir,dir=$installdir/$instance,g" /etc/init.d/solr4
-sed -i "s/\$zookeepers/$zookeepers/g" /etc/init.d/solr4
-chmod 744 /etc/init.d/solr4
+sed -i.bak "s,dir=installdir,dir=$installdir/$instance,g" $solr4init
+sed -i "s/\$zookeepers/$zookeepers/g" $solr4init
+chmod 744 $solr4init
 
-chkconfig --add solr4
-chkconfig solr4 on
+#chkconfig --add solr4
+#chkconfig solr4 on
 
-echo Use these commands to start Solr4.x manually or check status
-echo service solr4 start
-echo service solr4 status
-
-cat - <<"EOF2" > /usr/local/bin/solr4-add-collection.sh
-#! /bin/bash
- 
-if [ $# != 2 ]; then
-   echo "Usage: $0 collection-name number-of-shards"
-   echo "collection-name will be created in installdir/instance/solr/collection-name and loaded into Zookeeper"
-   exit 1
-fi
- 
-collection=$1
-nshards=${2:-3}
- 
-cp -a installdir/instance/solr/collection1/ installdir/instance/solr/$collection
-sed -i 's/collection1/collection2/' installdir/instance/solr/$collection/core.properties
-installdir/instance/cloud-scripts/zkcli.sh -zkhost zookeepers/solr -cmd upconfig -confdir installdir/instance/solr/$collection/conf -confname ${collection}Conf
- 
-sleep 30
- 
-curl "localhost:8983/solr/admin/collections?action=CREATE&name=${collection}&numShards=${nshards}&replicationFactor=1&collection.configName=${collection}Conf"
-EOF2
-sed -i "s,installdir,$installdir,g" /usr/local/bin/solr4-add-collection.sh
-sed -i "s,instance,$instance,g" /usr/local/bin/solr4-add-collection.sh
-sed -i "s/zookeepers/$zookeepers/g" /usr/local/bin/solr4-add-collection.sh
-chmod 744 /usr/local/bin/solr4-add-collection.sh
-
-echo Use /usr/local/bin/solr4-add-collection.sh to add additional document collections to Solr
+#echo Use these commands to start Solr4.x manually or check status
+echo $solr4init start
+echo $solr4init status
 
