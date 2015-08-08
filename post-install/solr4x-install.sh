@@ -14,8 +14,9 @@ clustername=$(awk 'NR==1{print $1}' /opt/mapr/conf/mapr-clusters.conf)
 zookeepers=$(su mapr -c "maprcli node listzookeepers | sed -n '2s/ *$//p'")
 instance=wf-instance
 bootstrap=$(hadoop fs -stat /apps/solr &>/dev/null && echo false || echo true) #If maprfs:/apps/solr does not exist, bootstrap
-#installdir=/apps/solr/solr-4.4.0 # Use Linux FS
+bootstrap=true
 installdir=/mapr/$clustername/apps/solr #Use MapR FS via NFS as install dir
+installdir=/opt/solr/solr-4.4.0 # Use Linux FS
 case $installdir in
    /mapr/*)
       if [ ! -d "$installdir" ]; then
@@ -26,6 +27,7 @@ case $installdir in
       ;;
    *)
       mkdir -p $installdir
+      hadoop fs -mkdir -p /apps/solr/data
       ;;
 esac
 
@@ -36,8 +38,11 @@ cd $installdir/solr*; installdir=$PWD; cp -a example $instance; chown -R mapr:ma
 cd $installdir/$instance #bootstrap must be run from here
 
 if [ "$bootstrap" == "true" ]; then
+   echo Run this command once to bootstrap Solr4
+   echo su mapr -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar\"
    echo "Use control-c when command has finished sending output and this string is visibile: (live nodes size: 1)"
-   su mapr -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar\"
+   #su mapr -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr -Dsolr.directoryFactory=HdfsDirectoryFactory -Dsolr.lock.type=hdfs -Dsolr.data.dir=hdfs://host:port/path Dsolr.updatelog=hdfs://host:port/path -jar $installdir/$instance/start.jar\"
+   #su mapr -c "cd $installdir/$instance; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar"
    cat - <<-"EOF2" > /usr/local/bin/solr4-add-collection.sh
 		#! /bin/bash
 		
@@ -85,7 +90,7 @@ cat - <<"EOF" > $solr4init
 dir=installdir
 user="mapr"
 #cmd="java -Dsolr.solr.home=$dir/solr -DzkHost=$zookeepers/solr -jar $dir/start.jar"
-cmd="java -DzkHost=$zookeepers/solr -jar $dir/start.jar"
+cmd="java -DzkHost=$zookeepers/solr -Dsolr.directoryFactory=HdfsDirectoryFactory -Dsolr.lock.type=hdfs -Dsolr.data.dir=hdfs:///apps/solr/data -Dsolr.updatelog=hdfs:///apps/solr/data/log -jar $dir/start.jar"
 
 name=`basename $0`
 pid_file="/var/run/$name.pid"
@@ -181,7 +186,7 @@ chmod 744 $solr4init
 #chkconfig --add solr4
 #chkconfig solr4 on
 
-#echo Use these commands to start Solr4.x manually or check status
+echo Use these commands to start Solr4.x manually or check status
 echo $solr4init start
 echo $solr4init status
 
