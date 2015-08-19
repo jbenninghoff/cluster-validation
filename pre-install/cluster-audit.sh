@@ -89,11 +89,12 @@ case $distro in
       clush $parg2 "echo -n 'CPUspeed Service: '; ${SUDO:-} service cpuspeed status" 
       clush $parg2 "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
-      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core"
-      clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed'" ; echo $sep
-      clush $parg "echo Required RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done" ; echo $sep
-      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap lsof mysql mysql-server"
-      clush $parg "echo Missing RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done" ; echo $sep
+      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core lsof"
+      clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
+      #clush $parg "echo Required RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done | sort" ; echo $sep
+      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server"
+      clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
+      #clush $parg "echo Missing RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done |sort" ; echo $sep
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
@@ -132,9 +133,9 @@ clush $parg2 "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - mapr 
 echo Check for mapr users java exec permission and version
 clush $parg2 "echo -n 'Java version: '; ${SUDO:-} su - mapr -c 'java -version'"; echo $sep
 echo 'Check for mapr passwordless ssh (only for MapR v3.x)'
-clush $parg2 "${SUDO:-} ls ~mapr/.ssh; }"; echo $sep
+clush $parg2 "${SUDO:-} ls ~mapr/.ssh"; echo $sep
 echo Check for existing MapR install
-clush $parg "ls -d /opt/mapr/* | head" ; echo $sep
+clush $parg 'ls -d /opt/mapr/* | head' ; echo $sep
 echo Check for root ownership of /opt/mapr  
 clush $parg 'ls -ld $(readlink -f /opt/mapr)'
 clush $parg 'ls -ld $(readlink -f /opt/mapr) | awk "\$3!=\"root\" || \$4!=\"root\" {print \"/opt/mapr not owned by root:root!!\"}"'

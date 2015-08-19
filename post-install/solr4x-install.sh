@@ -7,16 +7,20 @@
 #curl "http://mirror.cogentco.com/pub/apache/lucene/solr/4.4.0/solr-4.4.0.tgz" -o /tmp/
 pkg=/tmp/solr-4.4.0.tgz #Full path to Solr package
 [ -f $pkg ] || { echo $pkg package not found; exit 1; }
-
 serviceacct=${1:-mapr} #Default service account is mapr but alternate account can be provided as arg
+su - $serviceacct -c "hadoop fs -stat /apps/solr" || { echo $serviceacct cannot access maprfs, check for ticket; exit 3; }
+
+instance=wf-instance
+solr4init=/etc/init.d/solr4
+solr4init=/usr/local/bin/solr4 #path to write start/stop/status init script
+solr4add=/usr/local/bin/solr4-add-collection.sh #path to write add solr collections script
 hostname=$(hostname -s)
 clustername=$(awk 'NR==1{print $1}' /opt/mapr/conf/mapr-clusters.conf)
-zookeepers=$(su mapr -c "maprcli node listzookeepers | sed -n '2s/ *$//p'")
-instance=wf-instance
-bootstrap=$(hadoop fs -stat /apps/solr &>/dev/null && echo false || echo true) #If maprfs:/apps/solr does not exist, bootstrap
-bootstrap=true
+zookeepers=$(su - $serviceacct -c "maprcli node listzookeepers | sed -n '2s/ *$//p'")
+bootstrap=$(su - $serviceacct -c "hadoop fs -stat /apps/solr &>/dev/null && echo false || echo true") #If maprfs:/apps/solr does not exist, bootstrap
+installdir=/apps/solr/solr-4.4.0 # Use Linux FS
 installdir=/mapr/$clustername/apps/solr #Use MapR FS via NFS as install dir
-installdir=/opt/solr/solr-4.4.0 # Use Linux FS
+echo Should have already exited; exit
 case $installdir in
    /mapr/*)
       if [ ! -d "$installdir" ]; then
@@ -27,7 +31,6 @@ case $installdir in
       ;;
    *)
       mkdir -p $installdir
-      hadoop fs -mkdir -p /apps/solr/data
       ;;
 esac
 
@@ -38,12 +41,9 @@ cd $installdir/solr*; installdir=$PWD; cp -a example $instance; chown -R mapr:ma
 cd $installdir/$instance #bootstrap must be run from here
 
 if [ "$bootstrap" == "true" ]; then
-   echo Run this command once to bootstrap Solr4
-   echo su mapr -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar\"
-   echo "Use control-c when command has finished sending output and this string is visibile: (live nodes size: 1)"
-   #su mapr -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr -Dsolr.directoryFactory=HdfsDirectoryFactory -Dsolr.lock.type=hdfs -Dsolr.data.dir=hdfs://host:port/path Dsolr.updatelog=hdfs://host:port/path -jar $installdir/$instance/start.jar\"
-   #su mapr -c "cd $installdir/$instance; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar"
-   cat - <<-"EOF2" > /usr/local/bin/solr4-add-collection.sh
+   echo "Use control-c when command has finished sending output and this string is visibile: (live nodes size: 1)"; sleep 3
+   echo su - $serviceacct -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar\"
+   cat - <<-"EOF2" > $solr4add
 		#! /bin/bash
 		
 		if [ $# != 2 ]; then
@@ -64,17 +64,16 @@ if [ "$bootstrap" == "true" ]; then
 		curl "localhost:8983/solr/admin/collections?action=CREATE&name=${collection}&numShards=${nshards}&replicationFactor=1&collection.configName=${collection}Conf"
 	EOF2
 
-   sed -i "s,installdir,$installdir,g" /usr/local/bin/solr4-add-collection.sh
-   sed -i "s,instance,$instance,g" /usr/local/bin/solr4-add-collection.sh
-   sed -i "s/zookeepers/$zookeepers/g" /usr/local/bin/solr4-add-collection.sh
-   chmod 744 /usr/local/bin/solr4-add-collection.sh
+   sed -i "s,installdir,$installdir,g" $solr4add
+   sed -i "s,instance,$instance,g" $solr4add
+   sed -i "s/zookeepers/$zookeepers/g" $solr4add
+   chmod 744 $solr4add
 
-   echo Use /usr/local/bin/solr4-add-collection.sh to add additional document collections to Solr
+   echo Use $solr4add to add additional document collections to Solr
+   su - $serviceacct -c "hadoop fs -mkdir -p /apps/solr"
 fi
 
 #make solr4 init script
-solr4init=/etc/init.d/solr4
-solr4init=/usr/local/bin/solr4
 cat - <<"EOF" > $solr4init
 #!/bin/sh
 ### BEGIN INIT INFO
@@ -90,12 +89,12 @@ cat - <<"EOF" > $solr4init
 dir=installdir
 user="mapr"
 #cmd="java -Dsolr.solr.home=$dir/solr -DzkHost=$zookeepers/solr -jar $dir/start.jar"
-cmd="java -DzkHost=$zookeepers/solr -Dsolr.directoryFactory=HdfsDirectoryFactory -Dsolr.lock.type=hdfs -Dsolr.data.dir=hdfs:///apps/solr/data -Dsolr.updatelog=hdfs:///apps/solr/data/log -jar $dir/start.jar"
+cmd="java -DzkHost=$zookeepers/solr -jar $dir/start.jar"
 
 name=`basename $0`
-pid_file="/var/run/$name.pid"
-stdout_log="/var/log/$name.log"
-stderr_log="/var/log/$name.err"
+pid_file="/var/tmp/$name.pid"
+stdout_log="/var/tmp/$name.log"
+stderr_log="/var/tmp/$name.err"
 
 # Source function library.
 . /etc/rc.d/init.d/functions
@@ -186,7 +185,7 @@ chmod 744 $solr4init
 #chkconfig --add solr4
 #chkconfig solr4 on
 
-echo Use these commands to start Solr4.x manually or check status
+#echo Use these commands to start Solr4.x manually or check status
 echo $solr4init start
 echo $solr4init status
 
