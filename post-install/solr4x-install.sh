@@ -42,7 +42,7 @@ cd $installdir/$instance #bootstrap must be run from here
 
 if [ "$bootstrap" == "true" ]; then
    echo "Use control-c when command has finished sending output and this string is visibile: (live nodes size: 1)"; sleep 3
-   echo su - $serviceacct -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=wellsfargo -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar\"
+   echo su - $serviceacct -c \"cd $installdir/$instance\; java -DnumShards=3 -Dbootstrap_confdir=$installdir/$instance/solr/collection1/conf -Dcollection.configName=myconfig -DzkHost=$zookeepers/solr  -jar $installdir/$instance/start.jar\"
    cat - <<-"EOF2" > $solr4add
 		#! /bin/bash
 		
