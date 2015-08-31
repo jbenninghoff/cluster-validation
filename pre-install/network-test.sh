@@ -32,6 +32,9 @@ hcount=$(cat $tmpfile | wc -l)
 hcount=$(cat $tmpfile | wc -l)
 half1=($(sed -n "1,$(($hcount/2))p" $tmpfile))
 half2=($(sed -n "$(($hcount/2+1)),\$p" $tmpfile))
+# Tar up any previous log files
+tmp=${half2[@]}
+clush -w ${tmp// /,} 'tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz *-{rpctest,iperf}.log; rm *-{rpctest,iperf}.log'
 
 #############################################################
 # Manually define array of server hosts (half of all hosts in cluster)
@@ -91,12 +94,10 @@ tmp=${half2[@]}
 echo; [ $concurrent == "true" ] && echo Concurrent network throughput results || echo Sequential network throughput results
 if [ $runiperf == "true" ]; then
    clush -w ${tmp// /,} grep -i -h -e ^ \*-iperf.log # Print the measured bandwidth (string TBD)
-   clush -w ${tmp// /,} 'tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz *-iperf.log; rm *-iperf.log' # Tar up the log files
    tmp=${half1[@]}
    clush -w ${tmp// /,} pkill iperf #Kill the servers
 else
    clush -w ${tmp// /,} grep -i -H -e ^Rate -e error \*-rpctest.log #Print the network bandwidth (mb/s is MB/sec), 1GbE=125MB/s, 10GbE=1250MB/s
-   clush -w ${tmp// /,} 'tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz *-rpctest.log; rm *-rpctest.log' # Tar up the log files then
    tmp=${half1[@]}
    clush -w ${tmp// /,} pkill rpctest #Kill the servers
 fi

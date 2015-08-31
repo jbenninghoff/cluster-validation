@@ -35,11 +35,13 @@ Download and extract the cluster-validation package with a command like this:
 Extract with tar in /root or your home folder and rename the top level folder like this:  
 
     mv jbenninghoff-cluster-validation-* cluster-validation
+    or
+    mv cluster-validation-* cluster-validation
 
 Copy the cluster-validation folder to all nodes in the cluster.  The
 clush command simplifies this:
 
-    clush -a --copy /path.../cluster-validation --dest /path.../cluster-validation
+    clush -a --copy /path.../cluster-validation
     clush -Ba ls /path.../cluster-validation	# confirm that all nodes have the utilties
 
 Step 1 : Gather Base Audit Information
