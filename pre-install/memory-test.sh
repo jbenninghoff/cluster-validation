@@ -5,7 +5,7 @@
 sockets=$(grep '^physical' /proc/cpuinfo | sort -u | grep -c ^)
 cores=$(grep '^cpu cores' /proc/cpuinfo | sort -u | awk '{print $NF}')
 thrds=$(grep '^siblings' /proc/cpuinfo | sort -u | awk '{print $NF}')
-scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script's directory
+scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script's folder
 #objdump -d $scriptdir/stream59
 
 if [ -f /sys/kernel/mm/transparent_hugepage/enabled ]; then
@@ -13,12 +13,21 @@ if [ -f /sys/kernel/mm/transparent_hugepage/enabled ]; then
 elif [ -f /sys/kernel/mm/redhat_transparent_hugepage/enabled ]; then
   enpath=/sys/kernel/mm/redhat_transparent_hugepage/enabled
 else
-  echo Transparent Huge Page setting not found, performance may be effected
+  echo Transparent Huge Page setting not found, performance may be affected
 fi
 
-if [ -n "$enpath" ]; then # save current THP setting
+# -t (THP) option to set THP for peak performance
+while getopts ":t" opt; do
+  case $opt in
+    t) thp=setit ;;
+    \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
+  esac
+done
+
+if [ -n "$enpath" -a -n "$thp" ]; then # save current THP setting
+  # To enable/disable hugepages, you must run as root
   thp=$(cat $enpath | grep -o '\[.*\]')
-  thp=${thp#[}; thp=${thp%]}
+  thp=${thp#[}; thp=${thp%]} #strip [] brackets off string
 fi
 
 if [ "$1" == "lat" ]; then
@@ -29,7 +38,6 @@ if [ "$1" == "lat" ]; then
    # Pinned to 1st socket.  Pinning to 2nd socket (0x8) shows slower latency
    [ -n "$thp" -a $(id -u) -eq 0 ] && echo $thp > $enpath
 else
-   # To enable/disable hugepages, you must run as root
    [ -n "$thp" -a $(id -u) -eq 0 ] && echo never > $enpath
    if [ $cores == $thrds ]; then
      $scriptdir/stream59

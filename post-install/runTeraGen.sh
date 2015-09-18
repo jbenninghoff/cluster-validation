@@ -29,7 +29,7 @@ else # MRv2 Yarn
      sudo hadoop mfs -setchunksize $[3*256*1024*1024] /benchmarks/tera/in  #default 256MB, optimal chunksize determined by cluster size
 
 
-    hadoop jar /opt/mapr/hadoop/hadoop-2.5.1/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.5.1-mapr-1503.jar teragen \
+    hadoop jar /opt/mapr/hadoop/hadoop-2.*/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.*-mapr-*.jar teragen \
     -Dmapreduce.job.maps=$DISKS \
     -Dmapreduce.map.speculative=false \
     -Dmapreduce.map.disk=0 \

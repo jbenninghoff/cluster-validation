@@ -10,10 +10,11 @@
 
 sep='====================================================================='
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)"
+distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 serviceacct=mapr
-[ $(id -u) -ne 0 ] && SUDO=sudo
+[ $(id -u) -ne 0 ] && SUDO='sudo PATH=/usr/sbin:$PATH'
 shopt -s nocasematch
 
 # Common arguments to pass in to clush execution
@@ -115,7 +116,7 @@ echo Check for tmpwatch on NM local dir
 clush $parg "grep /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"
 echo $sep
 #clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
-clush $parg java -version; echo $sep
+clush $parg -B java -version; echo $sep
 echo Hostname IP addresses
 clush $parg 'hostname -I'; echo $sep
 echo DNS lookup
@@ -126,17 +127,18 @@ echo Check for nproc limit
 clush $parg2 "grep -h nproc /etc/security/limits.d/*nproc.conf"; echo $sep
 
 echo "Check for mapr user login" #TBD use $serviceacct instead of mapr account name
-clush $parg2 -S "echo 'mapr login for Hadoop '; getent passwd mapr" || { echo 'mapr user NOT found!'; exit 2; }
-echo Check for mapr user open file and process limits
-clush $parg2 "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -u'" ; echo $sep
-clush $parg2 "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - mapr -c 'ulimit -n'" ; echo $sep
-echo Check for mapr users java exec permission and version
-clush $parg2 "echo -n 'Java version: '; ${SUDO:-} su - mapr -c 'java -version'"; echo $sep
-echo 'Check for mapr passwordless ssh (only for MapR v3.x)'
-clush $parg2 "${SUDO:-} ls ~mapr/.ssh"; echo $sep
+clush $parg2 -S "echo 'mapr login for Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
+echo Check for $serviceacct user open file and process limits
+clush $parg2 "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -u'" ; echo $sep
+clush $parg2 "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'" ; echo $sep
+echo Check for $serviceacct users java exec permission and version
+clush $parg2 -B "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
+echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
+clush $parg2 "${SUDO:-} ls ~$serviceacct/.ssh"; echo $sep
 echo Check for existing MapR install
 clush $parg 'ls -d /opt/mapr/* | head' ; echo $sep
 echo Check for root ownership of /opt/mapr  
+clush $parg 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'
 clush $parg 'ls -ld $(readlink -f /opt/mapr)'
 clush $parg 'ls -ld $(readlink -f /opt/mapr) | awk "\$3!=\"root\" || \$4!=\"root\" {print \"/opt/mapr not owned by root:root!!\"}"'
 #echo 'Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)'

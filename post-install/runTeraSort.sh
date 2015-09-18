@@ -42,7 +42,7 @@ else # MRv2 Yarn ====================================================
 
     # TeraSort baseline execution, start with this before experimenting with any options on MapR v3.x
     hadoop fs -rm -r /benchmarks/tera/out/tb
-    hadoop jar /opt/mapr/hadoop/hadoop-2.5.1/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.5.1-mapr-1503.jar terasort \
+    hadoop jar /opt/mapr/hadoop/hadoop-2.*/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.*-mapr-*.jar terasort \
     -Dmapreduce.map.disk=0 \
     -Dmapreduce.map.cpu.vcores=0 \
     -Dmapreduce.map.memory.mb=2100 \
