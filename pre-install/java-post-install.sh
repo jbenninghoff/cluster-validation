@@ -1,6 +1,12 @@
 #!/bin/bash
 
-javapath=/usr/java/default
+#curl -L -C - -b "oraclelicense=accept-securebackup-cookie" -O http://download.oracle.com/otn-pub/java/jdk/7u75-b13/jdk-7u75-linux-x64.rpm
+#clush -ab -c /tmp/jdk-7u75-linux-x64.rpm
+#clush -ab yum -y localinstall /tmp/jdk-7u75-linux-x64.rpm
+
+javapath=/usr/java/default #Oracle
+#javapath=/usr/lib/jvm/java #OpenJDK
+
 [ -d $javapath ] || { echo $javapath does not exist; exit 1; }
 
 for item in java javac javaws jar jps javah; do

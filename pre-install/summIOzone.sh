@@ -1,16 +1,20 @@
 #!/bin/bash
 # script which summarizes iozone results on a set of disks
 # iozone results presummed to be in current folder in .log files
+# updated to work with AWS
 
-cat sd*iozone.log | gawk '
+cat *-iozone.log | gawk '
    BEGIN {
      swmin=6000000; srmin=swmin; rrmin=swmin; rwmin=swmin
    }
 
 # Match begining of IOzone output line and capture data fields
-   /         4194304    1024/ {
-     # err chk if argc < 8
+#   /         4194304    1024/ {
+   /KB  reclen +write/ {
+     getline
+     # err chk if NF < 8
      count++
+     fsize = $1
      swtotal += $3
      srtotal += $5
      rrtotal += $7
@@ -26,53 +30,60 @@ cat sd*iozone.log | gawk '
    }
 
    END {
+     printf "%-7s %1.2f%s\n", "File size:", fsize/(1024*1024), "GB"
+     printf "%-7s %6d\n", "Disk count:", count
+     print ""
      print "IOzone Sequential Write Summary(KB/sec)"
      swavg = swtotal/count
-     printf "%-7s %6d\n", "count:", count
+     printf "%-7s %1.2f%s\n", "aggregate:", swtotal/(1024*1024), "GB/sec"
+     printf "%-7s %6d\n", "mean:", swavg
      printf "%-7s %6d\n", "min:", swmin
      printf "%-7s %6d\n", "max:", swmax
-     printf "%-7s %6d\n", "mean:", swavg
      for (val in swvals) {
        svals += (swvals[val] - swavg) ** 2
      }
 #     print "stdev: ", sqrt(svals/count)
      printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / swavg)
+     print ""
 
      print "IOzone Sequential Read Summary(KB/sec)"
      sravg = srtotal/count
-     printf "%-7s %6d\n", "count:", count
+     printf "%-7s %1.2f%s\n", "aggregate:", srtotal/(1024*1024), "GB/sec"
+     printf "%-7s %6d\n", "mean:", sravg
      printf "%-7s %6d\n", "min:", srmin
      printf "%-7s %6d\n", "max:", srmax
-     printf "%-7s %6d\n", "mean:", sravg
      for (val in srvals) {
        svals += (srvals[val] - sravg) ** 2
      }
 #     print "stdev: ", sqrt(svals/count)
      printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / sravg)
+     print ""
 
      print "IOzone Random Write Summary(KB/sec)"
      rwavg = rwtotal/count
-     printf "%-7s %6d\n", "count:", count
+     printf "%-7s %1.2f%s\n", "aggregate:", rwtotal/(1024*1024), "GB/sec"
+     printf "%-7s %6d\n", "mean:", rwavg
      printf "%-7s %6d\n", "min:", rwmin
      printf "%-7s %6d\n", "max:", rwmax
-     printf "%-7s %6d\n", "mean:", rwavg
      for (val in rwvals) {
        svals += (rwvals[val] - rwavg) ** 2
      }
 #     print "stdev: ", sqrt(svals/count)
      printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / rwavg)
+     print ""
 
      print "IOzone Random Read Summary(KB/sec)"
      rravg = rrtotal/count
-     printf "%-7s %6d\n", "count:", count
+     printf "%-7s %1.2f%s\n", "aggregate:", rrtotal/(1024*1024), "GB/sec"
+     printf "%-7s %6d\n", "mean:", rravg
      printf "%-7s %6d\n", "min:", rrmin
      printf "%-7s %6d\n", "max:", rrmax
-     printf "%-7s %6d\n", "mean:", rravg
      for (val in rrvals) {
        svals += (rrvals[val] - rravg) ** 2
      }
 #     print "stdev: ", sqrt(svals/count)
      printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / rravg)
+     print ""
    }
 '
-# jbenninghoff@maprtech.com 2012-Aug-31  vim: set ai et sw=3 tabstop=3: 
+# jbenninghoff 2012-Aug-31  vim: set ai et sw=3 tabstop=3: 
