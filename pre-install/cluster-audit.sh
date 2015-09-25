@@ -14,7 +14,8 @@ distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 serviceacct=mapr
-[ $(id -u) -ne 0 ] && SUDO='sudo PATH=/usr/sbin:$PATH'
+[ $(id -u) -ne 0 ] && SUDO='env PATH=/sbin:/usr/sbin:$PATH'
+[ $(id -u) -ne 0 ] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH'
 shopt -s nocasematch
 
 # Common arguments to pass in to clush execution
@@ -31,6 +32,7 @@ clush $parg2 "${SUDO:-} dmidecode | grep -A3 '^BIOS I'"; echo $sep
 # probe for cpu info ###############
 clush $parg "grep '^model name' /proc/cpuinfo | sort -u"; echo $sep
 clush $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' | awk '/^CPU MHz:/{sub(\$3,sprintf(\"%0.0f\",\$3))};{print}'"; echo $sep
+clush $parg "lscpu | grep -e ^Thread"; echo $sep
 
 # probe for mem/dimm info ###############
 clush $parg "cat /proc/meminfo | grep -i ^memt | uniq"; echo $sep
