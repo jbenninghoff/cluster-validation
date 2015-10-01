@@ -15,24 +15,18 @@
 # Effectively, the "fsize" argument becomes a "bytesPerDisk" arg
 # for YARN clusters.
 
-YARN="false"
-
-MRV=$(maprcli cluster mapreduce get |tail -1 |awk '{print $1}')
-[ "$MRV" == "yarn" ] && YARN="true"
-
-
+#MRV=$(maprcli cluster mapreduce get |tail -1 |awk '{print $1}')
+MRV=$(hadoop version | awk 'NR==1{printf("%1.1s\n",$2)}')
 # Size of files to be written (in MB)
 fsize=4000
 
-if [ $YARN = "true" ] ; then
-
+if [ $MRV == "2" ] ; then
    HHOME=$(ls -d /opt/mapr/hadoop/hadoop-2*)
    HVER=${HHOME#*/hadoop-}
    TJAR=$(ls $HHOME/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-$HVER-*-tests.jar)
    tdisks=$(maprcli dashboard info -json | grep total_disks| grep -o '[0-9][0-9]*')
-
-      # Use "mapreduce" properties to force <N> containers per available disk
-      # Default is 2 (so map.disk=0.5 and nrFiles is mtasks*2 )
+   # Use "mapreduce" properties to force <N> containers per available disk
+   # Default is 2 (so map.disk=0.5 and nrFiles is mtasks*2 )
    filesPerDisk=2
    mapDisk=`echo "scale=2; 1 / $filesPerDisk" | bc`; echo $mapDisk
    hadoop jar $TJAR TestDFSIO \
@@ -42,8 +36,8 @@ if [ $YARN = "true" ] ; then
       -Dmapreduce.map.disk=${mapDisk:-1} \
       -Dmapreduce.map.speculative=false \
       -Dmapreduce.reduce.speculative=false \
-      -write -nrFiles $[tdisks*$filesPerDisk] \
-         -fileSize $[fsize * ${1:-2}]  -bufferSize 65536
+      -write -nrFiles $[$tdisks*$filesPerDisk] \
+      -fileSize $[fsize * ${1:-2}]  -bufferSize 65536
 
    hadoop jar $TJAR TestDFSIO \
       -Dmapreduce.job.name=DFSIO-read \
@@ -59,21 +53,20 @@ if [ $YARN = "true" ] ; then
 #     -Dmapreduce.map.memory.mb=768       # default 1024
 #     -Dmapreduce.map.java.opts=-Xmx768m  # default -Xmx900m
 
-else  # YARN = "false"
-
+else  # $MRV == 1
    HHOME=$(ls -d /opt/mapr/hadoop/hadoop-0*)
    HVER=${HHOME#*/hadoop-}
    TJAR=$HHOME/hadoop-${HVER}-dev-test.jar
    mtasks=$(maprcli dashboard info -json | grep map_task_capacity | grep -o '[0-9][0-9]*')
 
-      # DFSIO write test 
+   # DFSIO write test 
    hadoop jar $TJAR TestDFSIO \
       -Dmapred.job.name=DFSIO-write \
       -Dmapred.map.tasks.speculative.execution=false \
       -Dmapred.reduce.tasks.speculative.execution=false \
       -write -nrFiles $mtasks -fileSize $fsize -bufferSize 65536
 
-      # DFSIO read test
+   # DFSIO read test
    hadoop jar $TJAR TestDFSIO \
       -Dmapred.job.name=DFSIO-read \
       -Dmapred.map.tasks.speculative.execution=false \

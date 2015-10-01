@@ -13,17 +13,20 @@ cat - << 'EOF'
 EOF
 read -p "Press enter to continue or ctrl-c to abort"
 
-concurrent=true; runiperf=false; multinic=false
-while getopts ":sim" opt; do
+concurrent=true; runiperf=false; multinic=false size=5000
+while getopts ":simz:" opt; do
   case $opt in
     s) concurrent=false ;;
     i) runiperf=true ;;
     m) multinic=true ;;
+    z) size=$OPTARG ;;
     \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
   esac
 done
 
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
+rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
+rpctestbin=$scriptdir/rpctest #Packaged version
 tmpfile=$(mktemp); trap 'rm $tmpfile' 0 1 2 3 15
 
 #############################################################
@@ -45,7 +48,7 @@ clush -w ${tmp// /,} 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); tar czf net
 if [ $(($hcount & 1)) -eq 1 ]; then 
    extraip=$(sed -n '$p' $tmpfile)
    echo Uneven IP address count, removing extra client IP
-   sed -n '$p' $tmpfile >> $tmpfile
+   sed -i '$d' $tmpfile
 fi
 hcount=$(cat $tmpfile | wc -l) #Redefine after $extraip removed
 half2=($(sed -n "$(($hcount/2+1)),\$p" $tmpfile)) #Redefine after $extraip del
@@ -80,9 +83,9 @@ for node in "${half2[@]}"; do
          ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" &  #Small initial test, increase -t value for better test
        else
          if [ $multinic == "true" ]; then
-            ssh -n $node "$scriptdir/rpctest -client -b 32 5000 ${multinics[$i]} > server-${half1[$i]}-rpctest.log" &
+            ssh -n $node "$scriptdir/rpctest -client -b 32 $size ${multinics[$i]} > server-${half1[$i]}-rpctest.log" &
          else
-            ssh -n $node "$scriptdir/rpctest -client -b 32 5000 ${half1[$i]} > server-${half1[$i]}-rpctest.log" & #Small initial test, increase 5000 by 10x or 50x
+            ssh -n $node "$scriptdir/rpctest -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log" & #Small initial test, increase 5000 by 10x or 50x
          fi
        fi
        ;;
@@ -92,9 +95,9 @@ for node in "${half2[@]}"; do
          ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 9 -i3 > server-${half1[$i]}-iperf.log" # Small initial test, increase -t value for better test
        else
          if [ $multinic == "true" ]; then
-            ssh -n $node "$scriptdir/rpctest -client -b 32 5000 ${multinics[$i]} > server-${half1[$i]}-rpctest.log"
+            ssh -n $node "$scriptdir/rpctest -client -b 32 $size ${multinics[$i]} > server-${half1[$i]}-rpctest.log"
          else
-            ssh -n $node "$scriptdir/rpctest -client -b 32 5000 ${half1[$i]} > server-${half1[$i]}-rpctest.log"
+            ssh -n $node "$scriptdir/rpctest -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log"
          fi
        fi
 
@@ -116,7 +119,7 @@ if [ -n "$extraip" ]; then
    if [ $runiperf == "true" ]; then
       ssh -n $extraip "$scriptdir/iperf -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" #Small initial test, increase -t value for better test
    else
-      ssh -n $extraip "$scriptdir/rpctest -client -b 32 5000 ${half1[$i]} > server-${half1[$i]}-rpctest.log"
+      ssh -n $extraip "$scriptdir/rpctest -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log"
    fi
 fi
 
