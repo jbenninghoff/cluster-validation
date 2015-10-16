@@ -50,6 +50,7 @@ echo MapR roles per host
 clush $parg ${SUDO:-} ls /opt/mapr/roles
 echo MapR packages installed
 clush $parg ${SUDO:-} 'rpm -qa | grep mapr-'
+# clush $parg ${SUDO:-} 'dpkg-query --list 'mapr-*''  # for Ubuntu
 
 #$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
 #echo MapR disk list per host
