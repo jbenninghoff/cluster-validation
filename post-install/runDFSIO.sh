@@ -15,7 +15,6 @@
 # Effectively, the "fsize" argument becomes a "bytesPerDisk" arg
 # for YARN clusters.
 
-#MRV=$(maprcli cluster mapreduce get |tail -1 |awk '{print $1}')
 MRV=$(hadoop version | awk 'NR==1{printf("%1.1s\n",$2)}')
 # Size of files to be written (in MB)
 fsize=4000
@@ -26,8 +25,9 @@ if [ $MRV == "2" ] ; then
    TJAR=$(ls $HHOME/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-$HVER-*-tests.jar)
    tdisks=$(maprcli dashboard info -json | grep total_disks| grep -o '[0-9][0-9]*')
    # Use "mapreduce" properties to force <N> containers per available disk
-   # Default is 2 (so map.disk=0.5 and nrFiles is mtasks*2 )
-   filesPerDisk=2
+   # Default is 1 (so map.disk=1 and nrFiles is tdisks*1 )
+   # The intent is to create one 'wave' of map tasks with max containers per node utilized
+   filesPerDisk=1
    mapDisk=`echo "scale=2; 1 / $filesPerDisk" | bc`; echo $mapDisk
    hadoop jar $TJAR TestDFSIO \
       -Dmapreduce.job.name=DFSIO-write \
@@ -47,26 +47,27 @@ if [ $MRV == "2" ] ; then
       -Dmapreduce.map.speculative=false \
       -Dmapreduce.reduce.speculative=false \
       -read -nrFiles $[tdisks*$filesPerDisk] \
-         -fileSize $[fsize * ${1:-2}]  -bufferSize 65536
+      -fileSize $[fsize * ${1:-2}]  -bufferSize 65536
 
 # Optional settings to ratchet down memory consumption
 #     -Dmapreduce.map.memory.mb=768       # default 1024
 #     -Dmapreduce.map.java.opts=-Xmx768m  # default -Xmx900m
 
 else  # $MRV == 1
+
    HHOME=$(ls -d /opt/mapr/hadoop/hadoop-0*)
    HVER=${HHOME#*/hadoop-}
    TJAR=$HHOME/hadoop-${HVER}-dev-test.jar
    mtasks=$(maprcli dashboard info -json | grep map_task_capacity | grep -o '[0-9][0-9]*')
 
-   # DFSIO write test 
+      # DFSIO write test 
    hadoop jar $TJAR TestDFSIO \
       -Dmapred.job.name=DFSIO-write \
       -Dmapred.map.tasks.speculative.execution=false \
       -Dmapred.reduce.tasks.speculative.execution=false \
       -write -nrFiles $mtasks -fileSize $fsize -bufferSize 65536
 
-   # DFSIO read test
+      # DFSIO read test
    hadoop jar $TJAR TestDFSIO \
       -Dmapred.job.name=DFSIO-read \
       -Dmapred.map.tasks.speculative.execution=false \

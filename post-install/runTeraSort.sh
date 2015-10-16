@@ -45,9 +45,6 @@ else # MRv2 Yarn ====================================================
     hadoop jar /opt/mapr/hadoop/hadoop-2.*/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.*-mapr-*.jar terasort \
     -Dmapreduce.map.disk=0 \
     -Dmapreduce.map.cpu.vcores=0 \
-    -Dmapreduce.map.memory.mb=2100 \
-    -Dmapreduce.map.java.opts="-Xmx1900m -Xms1900m" \
-    -Dmapreduce.input.fileinputformat.split.minsize=$[2*128*1024*1024] \
     -Dmapreduce.map.output.compress=false \
     -Dmapreduce.map.sort.spill.percent=0.99 \
     -Dmapreduce.reduce.disk=0 \
@@ -55,7 +52,7 @@ else # MRv2 Yarn ====================================================
     -Dmapreduce.reduce.memory.mb=2700 \
     -Dmapreduce.reduce.shuffle.parallelcopies=20 \
     -Dmapreduce.reduce.merge.inmem.threshold=0 \
-    -Dmapreduce.task.io.sort.mb=1500 \
+    -Dmapreduce.task.io.sort.mb=480 \
     -Dmapreduce.task.io.sort.factor=100 \
     -Dmapreduce.job.reduces=$rtasks \
     -Dmapreduce.job.reduce.slowstart.completedmaps=0.55 \
@@ -65,6 +62,9 @@ else # MRv2 Yarn ====================================================
     /benchmarks/tera/in/tb /benchmarks/tera/out/tb 2>&1 | tee terasort.tmp
 
     sleep 3
+#    -Dmapreduce.map.memory.mb=2100 \
+#    -Dmapreduce.map.java.opts="-Xmx1900m -Xms1900m" \
+#    -Dmapreduce.input.fileinputformat.split.minsize=$[2*128*1024*1024] \
 #    -Dmapreduce.input.fileinputformat.split.minsize=805306368 \
 #    -Dmapreduce.reduce.shuffle.input.buffer.percent=0.85 \
 #    -Dmapreduce.maprfs.use.compression=false \
