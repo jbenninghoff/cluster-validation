@@ -39,13 +39,13 @@ ${node:-} ${SUDO:-} maprcli volume list -columns numreplicas,mountdir,used,numco
 echo MapR Storage Pools
 clush $parg ${SUDO:-} /opt/mapr/server/mrconfig sp list -v; echo $sep
 echo MapR env settings
-clush $parg ${SUDO:-} grep ^export /opt/mapr/conf/env.sh
+clush $parg ${SUDO:-} grep ^export /opt/mapr/conf/env.sh; echo $sep
 echo mapred-site.xml checksum
 clush $parg ${SUDO:-} sum /opt/mapr/hadoop/hadoop-0.20.2/conf/mapred-site.xml; echo $sep
 echo MapR Central Configuration setting
-clush $parg ${SUDO:-} grep centralconfig /opt/mapr/conf/warden.conf
+clush $parg ${SUDO:-} grep centralconfig /opt/mapr/conf/warden.conf; echo $sep
 echo MapR Central Logging setting
-clush $parg ${SUDO:-} grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh
+clush $parg ${SUDO:-} grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh; echo $sep
 echo MapR roles per host
 clush $parg ${SUDO:-} ls /opt/mapr/roles
 echo MapR packages installed
