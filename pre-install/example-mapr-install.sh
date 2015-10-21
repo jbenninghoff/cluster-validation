@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
 
 cat - << 'EOF'
 # Assumes clush is installed, available from EPEL repository

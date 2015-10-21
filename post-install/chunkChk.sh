@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Jul-22  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Jul-22  vi: set ai et sw=3 tabstop=3:
 
 #TBD: check for non-uniform map-slots or containers
 # Check TeraGenerated chunks per node
