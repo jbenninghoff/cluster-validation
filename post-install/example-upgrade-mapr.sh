@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Sep-19  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Sep-19  vi: set ai et sw=3 tabstop=3:
 
 # stop centralconfig?
 # stop ingest

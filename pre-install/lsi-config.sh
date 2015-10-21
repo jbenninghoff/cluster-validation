@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Mar-10  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Mar-10  vi: set ai et sw=3 tabstop=3:
 
 #Strip Size: 256K (1MB when firmware and OS driver allow, TBD)
 #Cache Policy: cached

@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
 
 # Node by node upgrade script for rolling upgrade 
 # Assumes ZK upgraded, JT not on CLDB nodes

@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Mar-8 vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Mar-8 vi: set ai et sw=3 tabstop=3:
 
 #MRV=$(maprcli cluster mapreduce get |tail -1 |awk '{print $1}')
 logname=terasort-$(date -Imin|cut -c-16).log

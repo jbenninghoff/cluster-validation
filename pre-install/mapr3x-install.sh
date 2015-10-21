@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
 
 grep ^all /etc/clustershell/groups || { echo clustershell group: all undefined; exit 1; }
 grep ^jt /etc/clustershell/groups || { echo clustershell group: jt undefined; exit 1; }

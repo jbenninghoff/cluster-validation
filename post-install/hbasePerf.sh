@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Sep-13  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Sep-13  vi: set ai et sw=3 tabstop=3:
 
 # HBase tests below assume /tables volume exists and mapping in core-site.xml is configured
 #maprcli volume create -name tables -path /tables -topology /data/default-rack -replication 3 -replicationtype low_latency 

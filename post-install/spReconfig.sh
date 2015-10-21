@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2014-Oct-16  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2014-Oct-16  vi: set ai et sw=3 tabstop=3:
 
 [ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
 

@@ -5,23 +5,20 @@
 
 usage() {
   echo "Usage: $0 <mysql hostname> <metastore hostname> <hiveserver2 hostname>"
-  echo Hostname groups not found in clustershell groups configuration file
   echo Provide all required hostnames for installation.
   exit 2
 }
 
-nodeset -e @mysql || usage
-nodeset -e @hivemeta || usage
-nodeset -e @hs2 || usage
+[ $# -ne 3 ] && usage
 
 # Configure clush groups
 grep '## AUTOGEN-HIVE ##' /etc/clustershell/groups >/dev/null 2>&1
 if [ "$?" != "0" ] ; then
   cat - <<EOF >> /etc/clustershell/groups
 ## AUTOGEN-HIVE ##
-mysql: $(nodeset -e @mysql)
-hivemeta: $(nodeset -e @hivemeta)
-hs2: $(nodeset -e @hs2)
+mysql: $1
+hivemeta: $2
+hs2: $3
 EOF
 fi
 
@@ -62,12 +59,12 @@ EOF
 
 # The driver for the MySQL JDBC connector (a jar file) is part of the MapR distribution under /opt/mapr/lib/.
 # Link this jar file into the Hive lib directory.
-clush -g mysql "ln -s /opt/mapr/lib/mysql-connector-java-5.1.25-bin.jar /opt/mapr/hive/hive-0.13/lib/mysql-connector-java-5.1.25-bin.jar"
+clush -g mysql "ln -s /opt/mapr/lib/mysql-connector-java-5.1.*-bin.jar /opt/mapr/hive/hive-0.13/lib/"
 
 #create or modify the hive-site.xml
 clush -g hivemeta,hs2 "cat - > /opt/mapr/hive/hive-0.13/conf/hive-site.xml" <<EOF
-<?xml version="1.0"?>
-<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<?xml version=\"1.0\"?>
+<?xml-stylesheet type=\"text/xsl\" href=\"configuration.xsl\"?>
 <!--
    Licensed to the Apache Software Foundation (ASF) under one or more
    contributor license agreements.  See the NOTICE file distributed with
@@ -119,11 +116,6 @@ clush -g hivemeta,hs2 "cat - > /opt/mapr/hive/hive-0.13/conf/hive-site.xml" <<EO
     <name>javax.jdo.option.ConnectionPassword</name>
     <value>$PASSWORD</value>
     <description>password to use against metastore database</description>
-</property>
-
-<property>
-    <name>hive.metastore.uris</name>
-    <value>thrift://$METASTORE_NODE:9083</value>
 </property>
 
 <property>
@@ -231,3 +223,6 @@ hadoop fs -mkdir /user/hive/warehouse
 hadoop fs -chmod 1777 /user/hive/warehouse  #accessible to all but can only delete own files
 hadoop fs -mkdir /tmp
 hadoop fs -chmod 1777 /tmp
+
+echo Run hive-verify.sh as non-root user next.
+

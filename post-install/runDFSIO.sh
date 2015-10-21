@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff@maprtech.com 2013-Apr-08  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Apr-08  vi: set ai et sw=3 tabstop=3:
 #
 # DFSIO creates a directory TestDFSIO within /benchmarks in the 
 # distributed file system.   You'll want "/benchmarks" to be its own
