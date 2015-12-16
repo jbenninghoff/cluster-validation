@@ -105,12 +105,15 @@ for node in "${half2[@]}"; do
        ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ifconfig | grep errors"
        echo
        ;;
+  #catch all client PIDs ($!)
+  clients="$clients $!"
   esac
   ((i++))
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
 [ $concurrent == "true" ] && echo Clients have been launched
-[ $concurrent == "true" ] && wait $! #Wait for clients to finish in concurrent runs
+#[ $concurrent == "true" ] && wait $! #Wait for last client to finish in concurrent run
+[ $concurrent == "true" ] && wait $clients #Wait for all clients to finish in concurrent run
 sleep 5
 
 # Handle the odd numbered node count (extra node)
