@@ -14,6 +14,7 @@ distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 serviceacct=mapr
+installdir=/opt/mapr
 [ $(id -u) -ne 0 ] && SUDO='env PATH=/sbin:/usr/sbin:$PATH'
 [ $(id -u) -ne 0 ] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH'
 shopt -s nocasematch
@@ -74,7 +75,7 @@ echo $sep
 case $distro in
    ubuntu)
       # Ubuntu SElinux tools not so good.
-      clush $parg2 'echo "NTP status "; ${SUDO:-} service ntp status'; echo $sep
+      clush $parg2 'echo "NTP status "; ${SUDO:-} service ntpd status'; echo $sep
       clush $parg2 "${SUDO:-} apparmor_status | sed 's/([0-9]*)//'"; echo $sep
       clush $parg "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo $sep
       clush $parg2 "echo 'Firewall status: '; ${SUDO:-} service ufw status | head -10"; echo $sep
@@ -82,7 +83,7 @@ case $distro in
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
    redhat|centos|red*)
-      clush $parg2 'echo "NTP status "; ${SUDO:-} service ntp status'; echo $sep
+      clush $parg2 'echo "NTP status "; ${SUDO:-} service ntpd status'; echo $sep
       #clush $parg "ntpstat | head -1" ; echo $sep
       clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; getenforce" ; echo $sep
       clush $parg2 "${SUDO:-} chkconfig --list iptables" ; echo $sep
@@ -92,10 +93,10 @@ case $distro in
       clush $parg2 "echo -n 'CPUspeed Service: '; ${SUDO:-} service cpuspeed status" 
       clush $parg2 "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
-      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core lsof"
+      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core lsof lvm2"
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
       #clush $parg "echo Required RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done | sort" ; echo $sep
-      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server"
+      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned"
       clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
       #clush $parg "echo Missing RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done |sort" ; echo $sep
    ;;
@@ -118,7 +119,7 @@ echo Check for tmpwatch on NM local dir
 clush $parg "grep /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"
 echo $sep
 #clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
-clush $parg -B java -version; echo $sep
+clush $parg -B 'java -version || echo See java-post-install.sh'; echo $sep
 echo Hostname IP addresses
 clush $parg 'hostname -I'; echo $sep
 echo DNS lookup

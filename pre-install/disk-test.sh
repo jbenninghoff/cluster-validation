@@ -105,6 +105,9 @@ if [ "$DISKS" == true ]; then
    echo Scrutinize this list carefully!!
    echo $disks | tr ' ' '\n' > /tmp/disk.list # write disk list to file for MapR install
    echo " "
+#read-only dd test, possible even after MFS is in place
+#for i in $disks; do dd of=/dev/null if=$i iflag=direct bs=1M count=1000 &> $(basename $i)-dd.log & done
+#echo; echo "Waiting for dd to finish"; wait; sleep 3; exit
    exit 0
 fi
 

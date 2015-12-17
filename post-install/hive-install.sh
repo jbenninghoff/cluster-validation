@@ -10,6 +10,7 @@ usage() {
 }
 
 [ $# -ne 3 ] && usage
+[ type clush >/dev/null 2>&1 ] || { echo clush required for install; exit 3; }
 
 # Configure clush groups
 grep '## AUTOGEN-HIVE ##' /etc/clustershell/groups >/dev/null 2>&1
@@ -147,16 +148,18 @@ clush -g hivemeta,hs2 "cat - > /opt/mapr/hive/hive-0.13/conf/hive-site.xml" <<EO
 </property>
 
 <property>
-  <name>hive.server2.enable.impersonation</name>
-  <value>true</value>
-  <description>Set this property to enable impersonation in Hive Server 2, not in cwiki URL?</description>
-</property>
-
-<property>
   <name>hive.server2.enable.doAs</name>
   <value>true</value>
   <description>Set this property to enable impersonation in Hive Server 2</description>
 </property>
+
+<!-- This value appears to be obsolete
+<property>
+  <name>hive.server2.enable.impersonation</name>
+  <value>true</value>
+  <description>Set this property to enable impersonation in Hive Server 2, not in cwiki URL?</description>
+</property>
+-->
 
 <!-- Misc Configuration ========================  -->
 <property>
