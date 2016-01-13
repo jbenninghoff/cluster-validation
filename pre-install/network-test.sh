@@ -105,9 +105,9 @@ for node in "${half2[@]}"; do
        ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ifconfig | grep errors"
        echo
        ;;
+  esac
   #catch all client PIDs ($!)
   clients="$clients $!"
-  esac
   ((i++))
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
