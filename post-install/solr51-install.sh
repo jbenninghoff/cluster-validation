@@ -7,8 +7,8 @@ hostname=$(hostname)
 clustername=$(awk 'NR==1{print $1}' /opt/mapr/conf/mapr-clusters.conf)
 zookeepers=$(maprcli node listzookeepers | sed -n 2p)
 
+# Download Solr 5.1 tarball and place in /mapr/$clustername/tmp/
 # curl 'http://mirror.cogentco.com/pub/apache/lucene/solr/5.1.0/solr-5.1.0.tgz' -o /mapr/$clustername/tmp/solr-5.1.0.tgz
-# Once Solr 5.1 tarball is downloaded and placed in /mapr/$clustername/tmp/
 tar xzf /mapr/$clustername/tmp/solr-5.1.0.tgz solr-5.1.0/bin/install_solr_service.sh --strip-components=2 #Extract install script
 ./install_solr_service.sh /mapr/$clustername/tmp/solr-5.1.0.tgz -i /opt -d /var/solr -u mapr -s solr -p 8983 #Use Linux FS
 
