@@ -3,6 +3,7 @@
 
 #Strip Size: 256K (1MB when firmware and OS driver allow, TBD)
 #Cache Policy: cached
+#LSI recommends Direct IO cache policy for all configurations except CacheCade v1.1.
 #Read Policy: read ahead
 #Write Policy: write thru
 #Disk Cache Policy: enabled
