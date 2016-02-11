@@ -18,10 +18,8 @@ installdir=/opt/mapr
 [ $(id -u) -ne 0 ] && SUDO='env PATH=/sbin:/usr/sbin:$PATH'
 [ $(id -u) -ne 0 ] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH'
 [ $(id -u) -ne 0 ] && SUDO='-o -qtt sudo PATH=/sbin:/usr/sbin:$PATH'
-#ssh $(nodeset -I0 -e @all) $SUDO service xxx status || { echo Not able to sudo without password, exiting; exit 1; }
-
-
-shopt -s nocasematch
+#ssh $(nodeset -I0 -e @all) $SUDO dmidecode -t bios || { echo Not able to sudo without password, exiting; exit 1; }
+#[ $(id -u) -ne 0 ] && { SUDO="sudo"; $SUDO -ln  grep 'sudo: a password is required' || exit; }
 
 # Common arguments to pass in to clush execution
 clcnt=$(nodeset -c @all)
@@ -105,7 +103,6 @@ case $distro in
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
-shopt -u nocasematch
 
 clush $parg "${SUDO:-} sysctl vm.swappiness net.ipv4.tcp_retries2 vm.overcommit_memory"; echo $sep
 echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 0\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"

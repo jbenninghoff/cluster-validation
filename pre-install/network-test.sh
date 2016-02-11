@@ -1,6 +1,5 @@
 #!/bin/bash
 # jbenninghoff 2013-Jun-07  vi: set ai et sw=3 tabstop=3:
-# TBD: replace iperf with iperf3 (avail in EPEL)
 
 cat - << 'EOF'
 # MapR rpc test to validate network bandwidth using cluster bisection strategy
@@ -10,6 +9,7 @@ cat - << 'EOF'
 # Use -m option to run tests on multiple server NICs
 # Use -s option to run tests in seqential mode
 # Use -i option to run iperf test instead of rpctest
+# Use -z option to specify size of test in MB (default==5000)
 EOF
 read -p "Press enter to continue or ctrl-c to abort"
 
@@ -25,6 +25,9 @@ while getopts ":simz:" opt; do
 done
 
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
+iperfbin=iperf #Installed iperf version
+iperfbin=iperf3 #Installed iperf3 {uses same options}
+iperfbin=$scriptdir/iperf #Packaged version
 rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
 rpctestbin=$scriptdir/rpctest #Packaged version
 tmpfile=$(mktemp); trap 'rm $tmpfile' 0 1 2 3 15
@@ -34,7 +37,6 @@ if [ $multinic == "true" ]; then # Capture multiple NIC addrs on servers
    clush -aN hostname -I | sort -n > $tmpfile || { echo Unable to acquire IP addresses with clush, check clush config; exit 2; }
    hcount=$(cat $tmpfile | wc -l)
    multinics=($(sed -n "1,$(($hcount/2))s/ /,/p" $tmpfile)) #comma sep for rpctest
-   #echo ${multinics[1]}; echo ${multinics[2]}; exit
 fi
 
 # Generate the bash arrays with IP address values using clush
@@ -44,7 +46,7 @@ half1=($(sed -n "1,$(($hcount/2))p" $tmpfile))
 half2=($(sed -n "$(($hcount/2+1)),\$p" $tmpfile))
 # Tar up any previous log files
 tmp=${half2[@]}
-clush -w ${tmp// /,} 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files'
+clush -w ${tmp// /,} 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); [ -n "$files" ] && { tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }'
 if [ $(($hcount & 1)) -eq 1 ]; then 
    extraip=$(sed -n '$p' $tmpfile)
    echo Uneven IP address count, removing extra client IP
@@ -60,9 +62,9 @@ half2=($(sed -n "$(($hcount/2+1)),\$p" $tmpfile)) #Redefine after $extraip del
 
 for node in "${half1[@]}"; do
   if [ $runiperf == "true" ]; then
-     ssh -n $node "$scriptdir/iperf -s -i3 > /dev/null" &  # iperf alternative test, requires iperf binary pushed out to all nodes like rpctest
+     ssh -n $node "$iperfbin -s -i3 > /dev/null" &  # iperf alternative test, requires iperf binary pushed out to all nodes like rpctest
   else
-     ssh -n $node $scriptdir/rpctest -server &
+     ssh -n $node $rpctestbin -server &
   fi
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
@@ -79,25 +81,27 @@ for node in "${half2[@]}"; do
   case $concurrent in #convert case block to if/else block
      true)
        if [ $runiperf == "true" ]; then
-         #ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -w 16K > server-${half1[$i]}-iperf.log" & #16K socket buffer/window size MapR uses
-         ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" &  #Small initial test, increase -t value for better test
+         #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -w 16K > server-${half1[$i]}-iperf.log" & #16K socket buffer/window size MapR uses
+         ssh -n $node "$iperfbin -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" &  #Small initial test, increase -t value for better test
        else
          if [ $multinic == "true" ]; then
-            ssh -n $node "$scriptdir/rpctest -client -b 32 $size ${multinics[$i]} > server-${half1[$i]}-rpctest.log" &
+            ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > server-${half1[$i]}-rpctest.log" &
          else
-            ssh -n $node "$scriptdir/rpctest -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log" & #Small initial test, increase 5000 by 10x or 50x
+            ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log" & #Small initial test, increase 5000 by 10x or 50x
          fi
        fi
+       #catch all client PIDs ($!)
+       clients="$clients $!"
        ;;
      false) #Sequential mode can be used to help isolate NIC and cable issues
        if [ $runiperf == "true" ]; then
-         #ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 30 -i3 -w 16K > server-${half1[$i]}-iperf.log" # 16K socket buffer/window size MapR uses
-         ssh -n $node "$scriptdir/iperf -c ${half1[$i]} -t 9 -i3 > server-${half1[$i]}-iperf.log" # Small initial test, increase -t value for better test
+         #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -i3 -w 16K > server-${half1[$i]}-iperf.log" # 16K socket buffer/window size MapR uses
+         ssh -n $node "$iperfbin -c ${half1[$i]} -t 9 -i3 > server-${half1[$i]}-iperf.log" # Small initial test, increase -t value for better test
        else
          if [ $multinic == "true" ]; then
-            ssh -n $node "$scriptdir/rpctest -client -b 32 $size ${multinics[$i]} > server-${half1[$i]}-rpctest.log"
+            ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > server-${half1[$i]}-rpctest.log"
          else
-            ssh -n $node "$scriptdir/rpctest -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log"
+            ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log"
          fi
        fi
 
@@ -105,24 +109,21 @@ for node in "${half2[@]}"; do
        ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ifconfig | grep errors"
        echo
        ;;
-  #catch all client PIDs ($!)
-  clients="$clients $!"
   esac
   ((i++))
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
 [ $concurrent == "true" ] && echo Clients have been launched
-#[ $concurrent == "true" ] && wait $! #Wait for last client to finish in concurrent run
-[ $concurrent == "true" ] && wait $clients #Wait for all clients to finish in concurrent run
+[ $concurrent == "true" ] && { echo Waiting for PIDS: $clients; wait $clients; } #Wait for all clients to finish in concurrent run
 sleep 5
 
 # Handle the odd numbered node count (extra node)
 if [ -n "$extraip" ]; then 
    ((i--)) #decrement to reuse last server in server list $half1
    if [ $runiperf == "true" ]; then
-      ssh -n $extraip "$scriptdir/iperf -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" #Small initial test, increase -t value for better test
+      ssh -n $extraip "$iperfbin -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" #Small initial test, increase -t value for better test
    else
-      ssh -n $extraip "$scriptdir/rpctest -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log"
+      ssh -n $extraip "$rpctestbin -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log"
    fi
 fi
 
