@@ -19,7 +19,7 @@ while getopts ":vtseag:" opt; do
    esac
 done
 
-[ type clush >/dev/null 2>&1 ] || { echo clush required for this script; exit 1; }
+type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }
 parg="-b -g ${group:-all}" # Assuming clush group 'all' is configured
 if [ ! -d /opt/mapr ]; then
    echo MapR not installed locally!
@@ -142,7 +142,8 @@ security_checks() {
    # Edge or Cluster nodes (Linux checks)
    msg="SElinux Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    clush $parg ${SUDO:-} "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo
-   msg="Nsswitch.conf Settings "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
+   msg="Nsswitch.conf Permissions and Settings "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
+   clush $parg ${SUDO:-} "echo Checking Permissions on /etc/nsswitch.conf; stat -c '%U %G %A %a %n' /etc/nsswitch.conf"
    clush $parg ${SUDO:-} 'echo Checking for nsswitch.conf settings; grep -v -e ^# -e ^$ /etc/nsswitch.conf'; echo
    clush $parg ${SUDO:-} "echo Checking Permissions on /tmp; stat -c '%U %G %A %a %n' /tmp"
    clush $parg ${SUDO:-} "service ntpd status|sed 's/(.*)//'"
@@ -153,15 +154,22 @@ security_checks() {
    clush $parg ${SUDO:-} 'echo Checking for C and Java Compilers; type gcc; type javac; find /usr/lib -name javac|sort'
    #TBD: clush $parg ${SUDO:-} 'echo Checking MySQL; type mysql && mysql -u root -e "show databases" && echo "Passwordless MySQL access"'
    clush $parg ${SUDO:-} 'echo Checking for Internet Access; { curl -f http://mapr.com/ 2>/dev/null >/dev/null || curl -f http://54.245.106.105/; } && echo Internet Access Available || echo Internet Access Denied'
-   clush $parg ${SUDO:-} "echo Checking TCP/UDP connections; netstat -t -u --numeric-ports"
+   clush $parg ${SUDO:-} "echo Checking TCP/UDP Listening Sockets; netstat -tpe"
+   clush $parg ${SUDO:-} "echo Checking All TCP/UDP connections; netstat -t -u --numeric-ports"
 
    # Cluster nodes only
    if [ "$edge" == "false" ]; then
+      msg="MapR Secure Mode "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
       ${node:-} ${SUDO:-} maprcli dashboard info -json | grep secure
+      msg="MapR Auditing Enabled "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} ${SUDO:-} maprcli config load -json | grep "mfs.feature.audit.support" #TBD:If true, set secure-cluster flag
+      msg="MapR Cluster Admin ACLs"; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} ${SUDO:-} maprcli acl show -type cluster
       # Check for MapR whitelist: http://doc.mapr.com/display/MapR/Configuring+MapR+Security#ConfiguringMapRSecurity-whitelist
+      msg="MapR MFS Whitelist Defined "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
       clush $parg ${SUDO:-} grep mfs.subnets.whitelist /opt/mapr/conf/mfs.conf
+      msg="MapR YARN Submit ACLs "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
+      clush $parg ${SUDO:-} "awk '/<queue/,/<\/queue>/ {if (/acl|<queue /&&!/<!--/) print}' /opt/mapr/hadoop/hadoop-2*/etc/hadoop/fair-scheduler.xml"
       clush $parg ${SUDO:-} "echo Checking Zookeeper Secure Mode; grep -i ^auth /opt/mapr/zookeeper/zookeeper-*/conf/zoo.cfg"
    fi
    # Edge or Cluster nodes
@@ -175,8 +183,8 @@ security_checks() {
    clush $parg ${SUDO:-} "echo Find Setuid Executables in /opt/mapr;  find /opt/mapr -type f \( -perm -4100 -o -perm -2010 \) -exec stat -c '%U %G %A %a %n' {} \; |sort"
    #clush $parg ${SUDO:-} "echo Find Setuid Executables in /opt/mapr; find /opt/mapr -perm +6000 -type f -exec stat -c '%U %G %A %a %n' {} \; |sort"
    clush $parg ${SUDO:-} "awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf" # Check MapR JPAM settings
-   clush $parg ${SUDO:-} "echo CheckSum of /etc/pam.d files; awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf | awk -F= '/serviceName/{print \$2}' |tr -d \\042  | xargs -i sh -c 'echo -n -e /etc/pam.d/{} \\\t; sum /etc/pam.d/{}'"
-   clush $parg ${SUDO:-} 'echo Checking for Saved Passwords; find /opt/mapr -type f \( -iname \*.xml\* -o -iname \*.conf\* -o -iname \*.json\* \) -exec grep -Hi -m1 -A1 -e password -e jceks {} \;'
+   clush $parg ${SUDO:-} "echo CheckSum of /etc/pam.d files; awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf | awk -F= '/serviceName/{print \$2}' |tr -d \\042  | xargs -i sh -c 'echo -n -e /etc/pam.d/{} \\\t; sum /etc/pam.d/{}'"; echo
+   clush $parg ${SUDO:-} 'echo Checking for Saved Passwords; find /opt/mapr -type f \( -iname \*.xml\* -o -iname \*.conf\* -o -iname \*.json\* \) -exec grep -Hi -m1 -A1 -e password -e jceks {} \;'; echo
 
    #portlist="8443 5181 7222 7221 9083 10000 10020 19888 14000 8002 8888 9001 50030 7443 1111 2049 9997 9998 8040 8041 8042 11000 111 8030 8031 8032 8033 8088 5660 6660"
    #for port in $portlist; do
@@ -188,12 +196,15 @@ security_checks() {
 }
 
 volume_acls() {
-   volumes=($(maprcli volume list -filter "[n!=mapr.*] and [n!=*local*]" -columns mountdir |sed -n '2,$p'))
+   volumep=($(maprcli volume list -filter "[n!=mapr.*] and [n!=*local*]" -columns mountdir |sed -n '2,$p'))
+   volumen=($(maprcli volume list -filter "[n!=mapr.*] and [n!=*local*]" -columns n |sed -n '2,$p'))
    mntpt=/mapr/my.cluster.com
 
-   for item in "${volumes[@]}"; do
-      find ${mntpt}${item} -maxdepth 2 -exec stat -c '%U %G %A %a %n' {} \;
-      echo
+   for item in "${volumep[@]}"; do
+      find ${mntpt}${item} -maxdepth 2 -exec stat -c '%U %G %A %a %n' {} \; echo
+   done
+   for item in "${volumen[@]}"; do
+      maprcli acl show -type volume -name ${item}; echo
    done
 }
 
