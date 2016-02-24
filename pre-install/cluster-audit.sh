@@ -104,8 +104,9 @@ case $distro in
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
 
+# See https://www.percona.com/blog/2014/04/28/oom-relation-vm-swappiness0-new-kernel/
 clush $parg "${SUDO:-} sysctl vm.swappiness net.ipv4.tcp_retries2 vm.overcommit_memory"; echo $sep
-echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 0\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"
+echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 1\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
 clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
 clush $parg 'for each in  /sys/block/{s,xv}d*/queue/max_hw_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep

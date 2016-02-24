@@ -35,13 +35,13 @@ clname='jbsec' #Name for the entire cluster, no spaces
 admin1='jbenninghoff' #Non-root, non-mapr linux account which has a known password, needed to login to web ui
 mapruid=mapr; maprgid=mapr #MapR service account and group
 spwidth=4 #Storage Pool width
-clargs='-o -qtt' #clush args
-[ $(id -u) -ne 0 ] && SUDO=sudo  #Use sudo, assuming account has passwordless sudo  (sudo -i)?
+clargs='-o -qtt' #clush args needed by sudo
+[ $(id -u) -ne 0 ] && SUDO=sudo  #Use sudo, assuming account has password-less sudo  (sudo -i)?
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 
-# Check cluster for pre-requistes
+# Check cluster for pre-requisites
 #clush -S -B -g clstr 'test -f /opt/mapr/conf/disktab' && { echo MapR appears to be installed; exit 3; }
 grep ^clstr /etc/clustershell/groups || { echo clustershell group: clstr undefined; exit 1; }
 grep ^cldb /etc/clustershell/groups || { echo clustershell group: cldb undefined; exit 1; }
@@ -60,7 +60,7 @@ clush -S -B -g clstr 'grep -i -m1 epel /etc/yum.repos.d/*' || { echo Warning EPE
 
 clear
 clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
-#clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1"
+#clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous $spwidth
 #clush $clargs -B -g clstr "sed -n '11,\$p' /tmp/disk.list > /tmp/disk.list2"
 #clush $clargs -B -g clstr "cat /tmp/disk.list1; wc /tmp/disk.list1" || { echo /tmp/disk.list1 not found; exit 4; }
 #clush $clargs -B -g clstr "cat /tmp/disk.list2; wc /tmp/disk.list2" || { echo /tmp/disk.list2 not found; exit 4; }
@@ -85,7 +85,7 @@ if [ "$uninstall" == "true" ]; then
       redhat|centos|red*)
          clush $clargs -a -b "${SUDO:-} yum -y erase mapr-\*" ;;
       ubuntu)
-         clush -a -B 'dpkg -l mapr-\*' ;;
+         clush -a -B 'dpkg -P mapr-\*' ;;
       *) echo Unknown Linux distro! $distro; exit ;;
    esac
    clush $clargs -a -b ${SUDO:-} rm -rf /opt/mapr
@@ -120,7 +120,7 @@ if [ "$secure" == "true" ]; then
    clush -S $clargs -w $cldb1 "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -S -genkeys -u $mapruid -g $maprgid -no-autostart"
    [ $? -ne 0 ] && { echo configure.sh failed, check screen and $cldb1:/opt/mapr/logs for errors; exit 2; }
    read -p "Press enter to continue or ctrl-c to abort"
-   scp "$cldb1:/opt/mapr/conf/{cldb.key,ssl_truststore,ssl_keystore,maprserverticket}" .
+   scp "$cldb1:/opt/mapr/conf/{cldb.key,ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
    #echo Needs testing
    clush -g cldb -x $cldb1 -c cldb.key --dest /opt/mapr/conf/
    clush $clargs -g cldb -x $cldb1 "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/cldb.key"
