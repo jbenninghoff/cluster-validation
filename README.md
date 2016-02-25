@@ -17,8 +17,8 @@ help assure that the cluster is in good working order and ready
 to hand over to your production team.
 
 Install clustershell (rpm provided, also available via EPEL) on a machine
-with passwordless ssh to all other cluster nodes.  If using a
-non-root account, then non-root account must have passwordless
+with password-less ssh to all other cluster nodes.  If using a
+non-root account, then non-root account must have password-less
 sudo rights configured in /etc/sudoers.  Update the file
 `/etc/clustershell/groups` to include an entry for "all" matching a
 pattern or patterns of host names in your cluster.  For example;
@@ -28,6 +28,9 @@ Verify clush works correctly by running:
     "clush -a date"
 Compare results with:
     "clush -ab date"
+
+Complete documentation for clush and clustershell can be found here:
+http://clustershell.readthedocs.org/en/latest/tools/clush.html
 
 Download and extract the cluster-validation package with a command like this:
 
@@ -128,7 +131,7 @@ the instructions from the doc.mapr.com web site for cluster installation.
 
 Post Installation tests
 --------------------------------
-Post install tests are in the post-install folder.  The primary 
+Post installation tests are in the post-install folder.  The primary 
 tests are RWSpeedTest and TeraSort.  Scripts to run each are 
 provided in the folder.  Read the scripts for additional info.  
 
@@ -143,11 +146,12 @@ benchmarks volume before running any of the post install benchmarks.
     number of reduce tasks per node up to the maximum reduce slots available on
     your cluster.  Experiment with the -D options as needed.
 
-The post-install folder contains a mapr-audit.sh script which can
-be run to provide an audit snapshot of the MapR configuration.  The
-script is a useful set of example maprcli commands. There are also
-example install, upgrade and uninstall scripts.  None of those will
-run without editing, so read the scripts carefully to understand
-how to edit them with site specific info.
+The post-install folder also contains a mapr-audit.sh script which
+can be run to provide an audit log of the MapR configuration.  The
+script contains a useful set of example maprcli commands. There are
+also example install, upgrade and un-install scripts that leverage
+clush to run quickly on an entire set of nodes or cluster.  None
+of those will run without editing, so read the scripts carefully
+to understand how to edit them with site specific info.
 
 /John Benninghoff
