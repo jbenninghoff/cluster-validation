@@ -26,6 +26,7 @@ clush -g hs2 "yum install -y mapr-hiveserver2 mapr-hive mysql"
 clush -g hivemeta "yum install -y mapr-hivemetastore mapr-hive mysql"
 # Capture latest installed Hive version/path
 hivepath=$(ls /opt/mapr/hive -c1 | sort -n | tail -1 | xargs -i echo /opt/mapr/hive/{})
+#TBD: check /opt/mapr/conf/env for HIVE/SASL settings
 
 #initial mysql configuration
 clush -g mysql "service mysqld start"
@@ -90,8 +91,8 @@ clush -g hivemeta,hs2 "cat - > $hivepath/conf/hive-site.xml" <<EOF
 <!-- Client Configuration ========================  -->
 <property>
     <name>hive.metastore.uris</name>
-    <description>Use blank(no value) to enable local metastore, use a URI to connect to a 'remote'(networked) metastore.</description>
     <value>thrift://$METASTORE_NODE:9083</value>
+    <description>Use blank(no value) to enable local metastore, use a URI to connect to a 'remote'(networked) metastore.</description>
 </property>
 
 <!-- MetaStore Configuration ========================  -->

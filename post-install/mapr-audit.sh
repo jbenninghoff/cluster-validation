@@ -6,8 +6,9 @@
 # Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
 
 verbose=false; terse=false; security=false; edge=false; group=all volacl=false
-while getopts ":vtsea:g:" opt; do
+while getopts ":dvtsea:g:" opt; do
    case $opt in
+      d) dbg=true ;;
       v) verbose=true ;;
       t) terse=true ;;
       s) security=true ;;
@@ -19,6 +20,7 @@ while getopts ":vtsea:g:" opt; do
    esac
 done
 
+sep='====================================================================='
 type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }
 grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
 parg="-b -g ${group:-all}" 
@@ -26,7 +28,6 @@ if [ ! -d /opt/mapr ]; then
    echo MapR not installed locally!
    clush $parg -S test -d /opt/mapr ||{ echo MapR not installed in node group $group; exit; }
 fi
-sep='====================================================================='
 mrv=$(hadoop version |awk 'NR==1 {printf("%1.1s\n", $2)}')
 srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
 
@@ -103,23 +104,31 @@ edgenode_checks() {
 }
 
 indepth_checks() {
+   [ -n "$dbg" ] && set -x
    msg="Verbose audits "; printf "%s%s \n" "$msg" "${sep:${#msg}}"; echo
    #$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
    #echo MapR disk list per host
    clush $parg 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'; echo $sep
    clush $parg 'echo "MapR Disk List per Host"; maprcli disk list -output terse -system 0 -host $(hostname)'; echo $sep
    clush $parg 'echo "MapR Disk Stripe Depth"; /opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'; echo $sep
+   clush $parg 'echo "MapR Disk Stripe Depth"; /opt/mapr/server/mrconfig dg list '; echo $sep
    msg="MapR Complete Volume List "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    ${node:-} maprcli volume list -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
    msg="MapR Storage Pool Details "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    ${node:-} maprcli dump balancerinfo | sort -r; echo $sep
    msg="Hadoop Configuration Variable Dump "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
-   ${node:-} hadoop conf -dump | sort; echo $sep
+   if [ "$mrv" == "1" ] ; then # MRv1
+      ${node:-} hadoop conf -dump | sort; echo $sep
+   else
+      ${node:-} hadoop conf-details print-all-effective-properties | grep -o '<name>.*</value>' |sed 's/<name>//;s/<\/value>//;s/<\/name><value>/=/'
+      echo $sep
+   fi
    msg="MapR Configuration Variable Dump "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    ${node:-} maprcli config load -json; echo $sep
    #msg="List Unique File Owners, Down 4 Levels"; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    #${node:-} find $mntpt -maxdepth 4 -exec stat -c '%U' {} \; |sort -u; echo $sep #find uniq owners
    # TBD: check all hadoop* packages installed
+   [ -n "$dbg" ] && set +x
 }
 
 security_checks() {
@@ -168,12 +177,13 @@ security_checks() {
    #clush $parg ${SUDO:-} "echo Find Setuid Executables in /opt/mapr; find /opt/mapr -perm +6000 -type f -exec stat -c '%U %G %A %a %n' {} \; |sort"
    clush $parg "awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf" # Check MapR JPAM settings
    clush $parg "echo CheckSum of /etc/pam.d files; awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf | awk -F= '/serviceName/{print \$2}' |tr -d \\042  | xargs -i sh -c 'echo -n -e /etc/pam.d/{} \\\t; sum /etc/pam.d/{}'"
-   clush $parg "echo 'HiveServer2 Impersonation'; ls /opt/mapr/roles |grep -q hiveserver2 && awk '/<prop/,/<\/prop>/ {if (/enable.doAs/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml"
-   clush $parg "echo 'Hive MetaStore Impersonation'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop>/ {if (/setugi/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml"
+   clush $parg "echo 'HiveServer2 Impersonation'; ls /opt/mapr/roles |grep -q hiveserver2 && awk '/<prop/,/<\/prop>/ {if (/enable.doAs/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo HiveServer2 not installed"
+   clush $parg "echo 'Hive MetaStore Impersonation'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop>/ {if (/setugi/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo Hive MetaStore not installed"
+   clush $parg "echo 'Hive MetaStore Password'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop>/ {if (/javax.jdo.option.ConnectionPassword/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml"
    clush $parg "echo 'Hadoop Proxy Users'; awk '/<prop/,/<\/prop>/ {if (/proxyuser/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"
    clush $parg "echo 'MapR Proxy Users'; ls /opt/mapr/conf/proxy"
    clush $parg "echo 'Drill Impersonation'; ls /opt/mapr/roles |grep -q drill && awk '/impersonation/,/}/ {if (/enabled:/) print}' /opt/mapr/drill/drill-1.*/conf/drill-override.conf || echo Drill not installed"
-   clush $parg "echo 'Oozie Proxy Settings '; ls /opt/mapr/roles |grep -q oozie && awk '/<prop/,/<\/prop/ {if (/ProxyUserService/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/oozie/oozie-*/conf/oozie-site.xml"
+   clush $parg "echo 'Oozie Proxy Settings '; ls /opt/mapr/roles |grep -q oozie && awk '/<prop/,/<\/prop/ {if (/ProxyUserService/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/oozie/oozie-*/conf/oozie-site.xml || echo Oozie not installed"
    #TBD: Find Hue security settings
    echo
    #TBD: Check file permissions on files MapR embeds with passwords at install time, like /opt/mapr/hadoop/hadoop-0.20.2/conf/ssl-server.xml

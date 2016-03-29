@@ -127,7 +127,7 @@ Complete Pre-Installation Checks
 When all subsystem tests have passed and met expectations,
 there is an example install script in the pre-install folder that
 can be modified and used for a scripted install.  Otherwise, follow
-the instructions from the doc.mapr.com web site for cluster installation.
+the instructions from the http://doc.mapr.com web site for cluster installation.
 
 Post Installation tests
 --------------------------------
