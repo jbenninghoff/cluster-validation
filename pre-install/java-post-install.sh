@@ -8,8 +8,9 @@ javapath=/usr/java/default #Oracle
 #javapath=/usr/lib/jvm/java #OpenJDK
 
 [ -d $javapath ] || { echo $javapath does not exist; exit 1; }
+echo $javapath is $(readlink -f $javapath)
 
-for item in java javac javaws jar jps javah; do
+for item in java javac javaws jar jps javah keytool; do
   alternatives --install /usr/bin/$item $item $javapath/bin/$item 9
   alternatives --set $item $javapath/bin/$item
 done

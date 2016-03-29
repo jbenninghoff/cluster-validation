@@ -23,7 +23,7 @@ else # MRv2 Yarn
     hadoop fs -rm -r /benchmarks/tera/in/\*
 
     #DISKS="`maprcli node list -columns hostname,cpus,service,disks |grep nodemanager | awk '{count+=$2}; END{print count}'`"
-    DISKS=$(maprcli node list -columns service,'MapRfs disks' |grep nodemanager | awk '{split($0,arr1); for (x in arr1) { if (match(arr1[x], /^[0-9]+$/) > 0) count+=arr1[x]}}; END{print count}')
+    DISKS=$(maprcli node list -columns service,'MapRfs disks' |grep nodemanager | awk '{split($0,arr1); for (x in arr1) { if (match(x,/^[0-9]+$/) > 0) print x; count+=x}}; END{print count}')
     # DISKS=250
      ((DISKS=DISKS*${1:-1})); echo DISKS: $DISKS
      sudo hadoop mfs -setchunksize $[3*256*1024*1024] /benchmarks/tera/in  #default 256MB, optimal chunksize determined by cluster size

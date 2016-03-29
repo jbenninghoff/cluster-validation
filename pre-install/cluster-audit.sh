@@ -5,31 +5,55 @@
 # differences between the nodes in a cluster.
 #
 # The script requires that the clush utility (a parallel execution shell)
-# be installed and configured for passwordless ssh connectivity to
+# be installed and configured using passwordless ssh connectivity for root to
 # all the nodes under test.  Or passwordless sudo for a non-root account.
+
+#DBG=true
+type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }
+grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
+parg="-b -g ${group:-all}"
+if [ ! -d /opt/mapr ]; then
+   echo MapR not installed locally!
+   serviceacct=mapr #guess
+   #clush $parg -S test -d /opt/mapr ||{ echo MapR not installed in node group $group; exit; }
+else
+   serviceacct=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
+fi
+[ -n "$DBG" ] && echo serviceacct: $serviceacct
+
+if [ $(id -u) -ne 0 -a $(id -un) != "$serviceacct" ]; then
+   SUDO='sudo PATH=/sbin:/usr/sbin:$PATH'
+   ${node:-} $SUDO -ln | grep 'sudo: a password is required' && exit
+   ssh $(nodeset -I0 -e @all) $SUDO dmidecode -t bios || { echo Not able to sudo without password, exiting; exit 1; }
+   parg="-o -qtt $parg" # Add -qtt for sudo via ssh/clush
+   #TBD: Support password-sudo using -S -i
+   #read -s -e -p 'Enter sudo password: ' mypasswd
+   #echo $mypasswd | sudo -S -i dmidecode -t bios || exit
+   #SUDO="echo $mypasswd | sudo -S -i "
+   #echo You must run this script as the MapR service account or root; exit
+fi
+if [ $(id -un) == "$serviceacct" ]; then
+   SUDO='env PATH=/sbin:/usr/sbin:$PATH'
+fi
 
 sep='====================================================================='
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)"
 distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
-serviceacct=mapr
-installdir=/opt/mapr
-[ $(id -u) -ne 0 ] && SUDO='env PATH=/sbin:/usr/sbin:$PATH'
-[ $(id -u) -ne 0 ] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH'
-[ $(id -u) -ne 0 ] && SUDO='-o -qtt sudo PATH=/sbin:/usr/sbin:$PATH'
-#ssh $(nodeset -I0 -e @all) $SUDO dmidecode -t bios || { echo Not able to sudo without password, exiting; exit 1; }
-#[ $(id -u) -ne 0 ] && { SUDO="sudo"; $SUDO -ln  grep 'sudo: a password is required' || exit; }
 
 # Common arguments to pass in to clush execution
 clcnt=$(nodeset -c @all)
-parg="-b -a -f $clcnt" #fanout set to cluster node count
+parg="$parg -f $clcnt" #fanout set to cluster node count
+#parg="-o '-oLogLevel=ERROR' $parg"
+
 
 echo ==================== Hardware audits ================================
 date; echo $sep
 # probe for system info ###############
 clush $parg "${SUDO:-} dmidecode | grep -A2 '^System Information'"; echo $sep
 clush $parg "${SUDO:-} dmidecode | grep -A3 '^BIOS I'"; echo $sep
+[ -n "$DBG" ] && exit
 
 # probe for cpu info ###############
 clush $parg "grep '^model name' /proc/cpuinfo | sort -u"; echo $sep
@@ -38,9 +62,10 @@ clush $parg "lscpu | grep -e ^Thread"; echo $sep
 
 # probe for mem/dimm info ###############
 clush $parg "cat /proc/meminfo | grep -i ^memt | uniq"; echo $sep
-clush $parg "echo -n 'DIMM slots: '; ${SUDO:-} dmidecode |grep -c '^[[:space:]]*Locator:'"; echo $sep
-clush $parg "echo -n 'DIMM count is: '; ${SUDO:-} dmidecode | grep -c '^[[:space:]]Size: [0-9][0-9]*'"; echo $sep
-clush $parg "${SUDO:-} dmidecode | awk '/Memory Device$/,/^$/ {print}' | grep -e '^Mem' -e Size: -e Speed: -e Part | sort -u | grep -v -e 'NO DIMM' -e 'No Module Installed' -e Unknown"; echo $sep
+clush $parg "echo -n 'DIMM slots: '; ${SUDO:-} dmidecode -t memory |grep -c '^[[:space:]]*Locator:'"; echo $sep
+clush $parg "echo -n 'DIMM count is: '; ${SUDO:-} dmidecode -t memory | grep -c '^[[:space:]]Size: [0-9][0-9]*'"; echo $sep
+clush $parg "${SUDO:-} dmidecode -t memory | awk '/Memory Device$/,/^$/ {print}' | grep -e '^Mem' -e Size: -e Speed: -e Part | sort -u | grep -v -e 'NO DIMM' -e 'No Module Installed' -e 'Not Specified'"; echo $sep
+[ -n "$DBG" ] && exit
 
 # probe for nic info ###############
 #clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed -e detected" 
@@ -84,9 +109,9 @@ case $distro in
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
    redhat|centos|red*)
-      clush $parg 'echo "NTP status "; ${SUDO:-} service ntpd status'; echo $sep
+      clush $parg 'echo "NTP status "; ${SUDO:-} service ntpd status |sed "s/(.*)//"'; echo $sep
       #clush $parg "ntpstat | head -1" ; echo $sep
-      clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; getenforce" ; echo $sep
+      clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; ${SUDO:-} getenforce" ; echo $sep
       clush $parg "${SUDO:-} chkconfig --list iptables" ; echo $sep
       #clush $parg "/sbin/service iptables status | grep -m 3 -e ^Table -e ^Chain" 
       clush $parg "${SUDO:-} service iptables status | head -10"; echo $sep
@@ -95,7 +120,7 @@ case $distro in
       clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
       pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core lsof lvm2"
-      clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
+      clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed" ; echo $sep
       #clush $parg "echo Required RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done | sort" ; echo $sep
       pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned"
       clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
@@ -106,18 +131,18 @@ esac
 
 # See https://www.percona.com/blog/2014/04/28/oom-relation-vm-swappiness0-new-kernel/
 clush $parg "${SUDO:-} sysctl vm.swappiness net.ipv4.tcp_retries2 vm.overcommit_memory"; echo $sep
-echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 1\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"
+echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 1\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"; echo $sep
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
 clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
-clush $parg 'for each in  /sys/block/{s,xv}d*/queue/max_hw_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
-clush $parg 'for each in  /sys/block/{s,xv}d*/queue/max_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg 'echo "Disk Controller Max Transfer Size:"; for each in  /sys/block/{s,xv}d*/queue/max_hw_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg 'echo "Disk Controller Configued Transfer Size:"; for each in  /sys/block/{s,xv}d*/queue/max_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
 clush $parg -u 30 "df -hT | cut -c22-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
 echo Check for nosuid mounts #TBD add noexec check
 clush $parg -u 30 "mount | grep nosuid"; echo $sep
 echo Check for /tmp permission 
-clush $parg "stat -c %a /tmp | grep -q 1777 || echo /tmp permissions not 1777" ; echo $sep
+clush $parg "stat -c %a /tmp | grep 1777 || echo /tmp permissions not 1777" ; echo $sep
 echo Check for tmpwatch on NM local dir
-clush $parg "grep /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"
+clush $parg "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"
 echo $sep
 #clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
 clush $parg -B 'java -version || echo See java-post-install.sh'; echo $sep
@@ -128,10 +153,10 @@ clush $parg 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup
 clush $parg 'host $(hostname -i)'; echo $sep
 echo Check for nproc limit
-clush $parg "${SUDO:-} grep -h nproc /etc/security/limits.d/*nproc.conf"; echo $sep
+clush $parg "${SUDO:-} grep nproc /etc/security/limits.d/*nproc.conf /etc/security/limits.conf |grep -v ':#' "; echo $sep
 
-echo "Check for mapr user login" #TBD use $serviceacct instead of mapr account name
-clush $parg -S "echo 'mapr login for Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
+echo "Check for $serviceacct login"
+clush $parg -S "echo '$serviceacct account for MapR Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
 echo Check for $serviceacct user open file and process limits
 clush $parg "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -u'" ; echo $sep
 clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'" ; echo $sep
@@ -143,7 +168,7 @@ echo Check for existing MapR install
 clush $parg 'ls -d /opt/mapr/* | head' ; echo $sep
 echo Check for root ownership of /opt/mapr  
 clush $parg 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'
-clush $parg 'ls -ld $(readlink -f /opt/mapr)'
+#clush $parg 'ls -ld $(readlink -f /opt/mapr)'
 clush $parg 'ls -ld $(readlink -f /opt/mapr) | awk "\$3!=\"root\" || \$4!=\"root\" {print \"/opt/mapr not owned by root:root!!\"}"'
 #echo 'Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)'
 #clush $parg "echo 'Root login '; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }"; echo $sep
