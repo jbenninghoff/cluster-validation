@@ -9,7 +9,7 @@
 # all the nodes under test.  Or passwordless sudo for a non-root account.
 
 #DBG=true
-type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }
+type clush >& /dev/null || { echo clush required for this script; exit 1; }
 grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
 parg="-b -g ${group:-all}"
 if [ ! -d /opt/mapr ]; then
@@ -76,6 +76,9 @@ clush $parg "${SUDO:-} ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"
 echo $sep
 
 # probe for disk info ###############
+#TBD: Probe disk controller settings, needs storcli64 binary, won't work on HP which needs smartarray tool
+#/opt/MegaRAID/storcli/storcli64 /c0 /eall /sall show | awk '$3 == "UGood"{print $1}'; exit 
+#./MegaCli64 -cfgeachdskraid0 WT RA cached NoCachedBadBBU –strpsz256 -a0
 clush $parg "echo 'Storage Controller: '; ${SUDO:-} lspci | grep -i -e ide -e raid -e storage -e lsi"; echo $sep
 clush $parg "echo 'Udev rules: '; ${SUDO:-} ls /etc/udev/rules.d"; echo $sep
 clush $parg "dmesg | grep -i raid | grep -i scsi"; echo $sep
@@ -117,12 +120,12 @@ case $distro in
       clush $parg "${SUDO:-} service iptables status | head -10"; echo $sep
       #clush $parg "echo -n 'Frequency Governor: '; for dev in /sys/devices/system/cpu/cpu[0-9]*; do cat \$dev/cpufreq/scaling_governor; done | uniq -c" 
       clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} service cpuspeed status" 
-      clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
+      #clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
       pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core lsof lvm2"
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed" ; echo $sep
       #clush $parg "echo Required RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done | sort" ; echo $sep
-      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned"
+      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools"
       clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
       #clush $parg "echo Missing RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done |sort" ; echo $sep
    ;;
@@ -134,8 +137,8 @@ clush $parg "${SUDO:-} sysctl vm.swappiness net.ipv4.tcp_retries2 vm.overcommit_
 echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 1\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"; echo $sep
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
 clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
-clush $parg 'echo "Disk Controller Max Transfer Size:"; for each in  /sys/block/{s,xv}d*/queue/max_hw_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
-clush $parg 'echo "Disk Controller Configued Transfer Size:"; for each in  /sys/block/{s,xv}d*/queue/max_sectors_kb; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg 'echo "Disk Controller Max Transfer Size:"; files=$(ls /sys/block/{sd,xvd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg 'echo "Disk Controller Configued Transfer Size:"; files=$(ls /sys/block/{sd,xvd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
 clush $parg -u 30 "df -hT | cut -c22-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
 echo Check for nosuid mounts #TBD add noexec check
 clush $parg -u 30 "mount | grep nosuid"; echo $sep
