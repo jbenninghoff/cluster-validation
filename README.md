@@ -91,11 +91,20 @@ about a minute or so to run.  It can be executed in parallel on all
 the cluster nodes with the command:
 
     clush -Ba '/root/cluster-validation/pre-install/memory-test.sh | grep ^Triad' | tee memory-test.log
-Memory bandwidth is determined by speed of DIMMs, number of memory
-channels and to a lesser degree by CPU frequency.  Current generation
-Xeon based servers with eight or more 1600MHz DIMMs can deliver
-70-80GB/sec Triad results. Previous generation Xeon cpus (Westmere)
-can deliver ~40GB/sec Triad results.
+
+System memory bandwidth is determined by speed of DIMMs, number of
+memory channels and to a lesser degree by CPU frequency.  Current
+generation Xeon based servers with eight or more 1600MHz DIMMs can
+deliver 70-80GB/sec Triad results. Previous generation Xeon cpus
+(Westmere) can deliver ~40GB/sec Triad results.  You can look up
+the cluster CPU as shown by cluster-audit.sh, at http://ark.intel.com/.
+The technical specifications for the CPU model will include the Max
+Memory Bandwidth (per CPU socket).  Servers typically have two CPU
+sockets, so doubling that Max Bandwidth shown will give you the Max
+Memory Bandwidth for the server.  The measured Stream Triad result
+from memory-test.log can then be compared to the Max Memory Bandwidth
+of the server.  The Triad bandwidth  should be approximately 75-85%
+of the Max Memory Bandwidth of the server.
 
 Step 4 : Evaluate Raw Disk Performance
 --------------------------------------
@@ -112,13 +121,14 @@ The test can be run in parallel on all nodes with:
 
     clush -ab /root/cluster-validation/pre-install/disk-test.sh
 
-Current generation (2012+) 7200 rpm SATA drives can produce 
-100-145 MB/sec sequential read and write performance.
-By default, the disk test only uses a 4GB data set size to finish
-quickly.  Consider using an additional larger size to measure
-streaming throughput more thoroughly.
-For large numbers of nodes and disks there is a summIOzone.sh script
-that can help provide a summary of disk-test.sh output using clush.
+Current generation (2012+) 7200 rpm SATA drives can produce 100-145
+MB/sec sequential read and write performance.  By default, the disk
+test only uses a 4GB data set size in order to finish quickly.
+Consider using an additional larger size to measure disk throughput
+more thoroughly.  This will typically require hours to run which
+could be done overnight if your schedule allows.  For large numbers
+of nodes and disks there is a summIOzone.sh script that can help
+provide a summary of disk-test.sh output using clush.
 
     clush -ab /root/cluster-validation/pre-install/summIOzone.sh
 

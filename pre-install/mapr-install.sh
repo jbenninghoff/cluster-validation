@@ -2,8 +2,8 @@
 # jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
 
 : << '--BLOCK-COMMENT--'
-Install options:
-1) Manually following doc.mapr.com documentation
+MapR Install options:
+1) Manually following http://doc.mapr.com documentation
 2) Bash script using clush groups and yum
 3) MapR GUI installer
 4) Vinces Ansible install playbooks
@@ -13,7 +13,7 @@ usage() {
   echo "Usage: $0 -s -m -u -a"
   echo "-s option for secure cluster installation"
   echo "-m option for MFS only cluster installation"
-  echo "-a option for dedicated admin node cluster installation"
+  echo "-a option for cluster with dedicated admin nodes installation"
   echo "-u option to uninstall existing cluster, destroying all data!"
   exit 2
 }
@@ -40,6 +40,7 @@ clargs='-o -qtt' #clush args needed by sudo
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
+maprver=5.1 #TBD: Grep repo file to confirm or alter
 
 # Check cluster for pre-requisites
 #clush -S -B -g clstr 'test -f /opt/mapr/conf/disktab' && { echo MapR appears to be installed; exit 3; }
@@ -57,13 +58,13 @@ clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" 
 clush -S -B -g clstr stat -c %a /tmp | grep -q 1777 || { echo Permissions not 1777 on /tmp on all nodes; exit 3; }
 clush -S -B -g clstr 'grep -i mapr /etc/yum.repos.d/*' || { echo MapR repos not found; exit 3; }
 clush -S -B -g clstr 'grep -i -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
-
-clear
 clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
-#clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous $spwidth
+#clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous Storage Pools [$spwidth]
 #clush $clargs -B -g clstr "sed -n '11,\$p' /tmp/disk.list > /tmp/disk.list2"
 #clush $clargs -B -g clstr "cat /tmp/disk.list1; wc /tmp/disk.list1" || { echo /tmp/disk.list1 not found; exit 4; }
 #clush $clargs -B -g clstr "cat /tmp/disk.list2; wc /tmp/disk.list2" || { echo /tmp/disk.list2 not found; exit 4; }
+
+clear
 cat - <<EOF
 Assuming that all nodes have been audited with cluster-audit.sh and all issues fixed
 Assuming that all nodes have met subsystem performance expectations as measured by memory-test.sh, network-test.sh and disk-test.sh
@@ -137,9 +138,9 @@ fi
 if [ "$mfs" == "true" ]; then
    clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -u $mapruid -g $maprgid -no-autostart"
 elif [ "$secure" == "true" ]; then
-   clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -I0 -e @hist) -S -u $mapruid -g $maprgid -no-autostart"
+   clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart -S"
 else
-   clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart"
+   clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart" #TBD: v4.1+ use RM zeroconf
 fi
 [ $? -ne 0 ] && { echo configure.sh failed, check screen and /opt/mapr/logs for errors; exit 2; }
 

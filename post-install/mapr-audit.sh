@@ -60,15 +60,18 @@ maprcli_check() {
 cluster_checks1() {
    echo ==================== MapR audits ================================
    date; echo $sep
+   msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    if [ "$mrv" == "1" ] ; then # MRv1
-      msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} hadoop job -list; echo $sep
    else
-      msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} mapred job -list; echo $sep
    fi
    msg="MapR Dashboard "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   ${node:-} maprcli dashboard info -json; echo $sep
+   if (type -p jq >/dev/null); then
+      ${node:-} maprcli dashboard info -json | jq '.data[] | {version, cluster,utilization}'; echo $sep
+   else
+      ${node:-} maprcli dashboard info -json; echo $sep
+   fi
    msg="MapR Alarms "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    ${node:-} maprcli alarm list -summary true; echo $sep
    msg="MapR Services "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
@@ -97,10 +100,17 @@ cluster_checks2() {
 }
 
 edgenode_checks() {
-   msg="Edge Node Checking "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   echo
+   msg="Edge Node Checking "; printf "%s%s \n" "$msg" "${sep:${#msg}}"; echo
    clush $parg 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'; echo $sep
-   #TBD: More edge/client checks needed
+   msg="Checking for MySQL Server "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   clush $parg ${SUDO:-} "service mysqld status 2>/dev/null"; echo $sep
+   #TBD: Check Hive config
+   #TBD: Check HS2 port and config
+   #TBD: Check MetaStore port and config
+   #TBD: Check Hue port and config
+   #TBD: Check Sqoop config
+   #TBD: Check Pig config
+   #TBD: Check Spark/Yarn config
 }
 
 indepth_checks() {
