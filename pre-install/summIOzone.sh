@@ -1,6 +1,6 @@
 #!/bin/bash
 # script which summarizes iozone results on a set of disks
-# iozone results presummed to be in current folder in .log files
+# iozone results presumed to be in current folder in .log files
 # updated to work with AWS
 
 cat *-iozone.log | gawk '
@@ -8,7 +8,7 @@ cat *-iozone.log | gawk '
      swmin=6000000; srmin=swmin; rrmin=swmin; rwmin=swmin
    }
 
-# Match begining of IOzone output line and capture data fields
+# Match beginning of IOzone output line and capture data fields
 #   /         4194304    1024/ {
    /KB  reclen +write/ {
      getline

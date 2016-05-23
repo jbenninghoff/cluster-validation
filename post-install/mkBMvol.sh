@@ -7,6 +7,8 @@
 # <name>mapred.tasktracker.map.tasks.maximum</name> <value>CPUS-1</value> 
 # <name>mapred.tasktracker.reduce.tasks.maximum</name> <value>CPUS/2</value> 
 
+#source <(awk '/^ *maprcli_check\(\)/,/^ *} *$/' mapr-audit.sh) #source maprcli_check function from mapr-audit.sh
+
 # Remove and recreate a MapR volume just for benchmarking, best if run only once
 # Use replication 1 to get peak write performance
 if maprcli volume info -name benchmarks > /dev/null; then #If benchmarks volume exists

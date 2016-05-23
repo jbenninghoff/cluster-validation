@@ -4,6 +4,7 @@
 # A script to probe an installed MapR system configuration, writing all results to stdout
 # Assumes clush is installed, available from EPEL repository
 # Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
+# Cluster Summary from log:  awk 'FNR==1 {print FILENAME}; /"version":/; /"cluster":/,/},/' mapr-audit.log
 
 verbose=false; terse=false; security=false; edge=false; group=all volacl=false
 while getopts ":dvtsea:g:" opt; do
@@ -78,12 +79,14 @@ cluster_checks1() {
    ${node:-} maprcli node list -columns hostname,svc; echo $sep
    msg="Zookeepers: "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    ${node:-} maprcli node listzookeepers; echo $sep
-   msg="MapR System Stats "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   ${node:-} maprcli node list -columns hostname,cpus,mused; echo $sep
+   msg="Current MapR Version: "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   ${node:-} maprcli config load -keys mapr.targetversion
    echo
 }
 
 cluster_checks2() {
+   msg="MapR System Stats "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   ${node:-} maprcli node list -columns hostname,cpus,mused; echo $sep
    clush $parg "echo 'MapR Storage Pools'; /opt/mapr/server/mrconfig sp list -v"; echo $sep
    msg="Customer Site Specific Volumes "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    ${node:-} maprcli volume list -filter "[n!=mapr.*] and [n!=*local*]" -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep

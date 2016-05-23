@@ -10,14 +10,15 @@
 
 #DBG=true
 type clush >& /dev/null || { echo clush required for this script; exit 1; }
-grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
+[ $(nodeset -c @all) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
 parg="-b -g ${group:-all}"
+serviceacct=mapr #guess
 if [ ! -d /opt/mapr ]; then
    echo MapR not installed locally!
-   serviceacct=mapr #guess
    #clush $parg -S test -d /opt/mapr ||{ echo MapR not installed in node group $group; exit; }
 else
    serviceacct=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
+   [ $? != 0 ] && serviceacct=mapr #if not found, reset
 fi
 [ -n "$DBG" ] && echo serviceacct: $serviceacct
 
@@ -59,6 +60,8 @@ clush $parg "${SUDO:-} dmidecode | grep -A3 '^BIOS I'"; echo $sep
 clush $parg "grep '^model name' /proc/cpuinfo | sort -u"; echo $sep
 clush $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' | awk '/^CPU MHz:/{sub(\$3,sprintf(\"%0.0f\",\$3))};{print}'"; echo $sep
 clush $parg "lscpu | grep -e ^Thread"; echo $sep
+#TBD: grep '^model name' /proc/cpuinfo | sed 's/.*CPU[ ]*\(.*\)[ ]*@.*/\1/'
+#TBD: curl -s -L 'http://ark.intel.com/search?q=E5-2420%20v2' | grep -A2 -e 'Memory Channels' -e 'Max Memory Bandwidth'
 
 # probe for mem/dimm info ###############
 clush $parg "cat /proc/meminfo | grep -i ^memt | uniq"; echo $sep
@@ -155,12 +158,12 @@ echo DNS lookup
 clush $parg 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup
 clush $parg 'host $(hostname -i)'; echo $sep
-echo Check for nproc limit
-clush $parg "${SUDO:-} grep nproc /etc/security/limits.d/*nproc.conf /etc/security/limits.conf |grep -v ':#' "; echo $sep
+echo Check for system wide nproc and nofile limits
+clush $parg "${SUDO:-} grep -e nproc -e nofile /etc/security/limits.d/*nproc.conf /etc/security/limits.conf |grep -v ':#' "; echo $sep
 
 echo "Check for $serviceacct login"
 clush $parg -S "echo '$serviceacct account for MapR Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
-echo Check for $serviceacct user open file and process limits
+echo Check for $serviceacct user specific open file and process limits
 clush $parg "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -u'" ; echo $sep
 clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'" ; echo $sep
 echo Check for $serviceacct users java exec permission and version
