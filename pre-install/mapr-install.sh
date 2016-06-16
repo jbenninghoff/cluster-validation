@@ -124,6 +124,7 @@ if [ "$upgrade" == "true" ]; then
    clush -g zk -b ${SUDO:-} service mapr-zookeeper qstatus
    clush -a -b ${SUDO:-} service mapr-warden start
    sleep 90; maprcli config save -values {mapr.targetversion:"`cat /opt/mapr/MapRBuildVersion`"}
+   maprcli cluster feature enable -all
    exit
 fi
 

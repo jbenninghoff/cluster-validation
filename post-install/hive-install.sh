@@ -121,6 +121,17 @@ clush -g hivemeta,hs2 "cat - > $hivepath/conf/hive-site.xml" <<EOF
     <description>password to use against metastore database</description>
 </property>
 
+<!-- SASL configuration on secure cluster, uncomment sasl property and comment out setugi property
+
+<property>
+  <name>hive.metastore.sasl.enabled</name>
+  <value>true</value>
+  <description> Set this property to enable Hive Metastore SASL on secure cluster
+  </description>
+</property>
+
+-->
+
 <property>
   <name>hive.metastore.execute.setugi</name>
   <value>true</value>
@@ -129,6 +140,7 @@ clush -g hivemeta,hs2 "cat - > $hivepath/conf/hive-site.xml" <<EOF
    using the client's reported user and group permissions. Note that this property must be set on
    BOTH the client and server sides. </description>
 </property>
+
 
 <!-- Hive Server2 Configuration ========================  -->
 <!-- https://cwiki.apache.org/confluence/display/Hive/Configuration+Properties#ConfigurationProperties-HiveServer2 -->
