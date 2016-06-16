@@ -24,9 +24,11 @@ if ! type clush >& /dev/null; then
    clush() { eval "$@"; } #clush becomes no-op, all commands run locally
    parg=""
 else
-#[ $(nodeset -c @all) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
-   grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
+   [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
+   #grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
    parg="-b -g ${group:-all}"
+   parg1="-S"
+   parg2="-B"
    # Common arguments to pass in to clush execution
    #clcnt=$(nodeset -c @all)
    #parg="$parg -f $clcnt" #fanout set to cluster node count
@@ -42,7 +44,7 @@ if [ -d /opt/mapr ]; then
 else
    echo MapR not installed locally!
    serviceacct=mapr #guess
-   clush -g all -S test -d /opt/mapr || echo MapR not installed in node group $group
+   clush -g ${group:-all} $parg1 test -d /opt/mapr || echo MapR not installed in node group $group
 fi
 [ -n "$DBG" ] && echo serviceacct: $serviceacct
 
@@ -177,7 +179,7 @@ echo Check for tmpwatch on NM local dir
 clush $parg "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"
 echo $sep
 #clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
-clush $parg -B 'echo "Java Version: "; java -version || echo See java-post-install.sh'; echo $sep
+clush $parg $parg2 'echo "Java Version: "; java -version || echo See java-post-install.sh'; echo $sep
 echo Hostname IP addresses
 clush $parg 'hostname -I'; echo $sep
 echo DNS lookup
@@ -190,7 +192,7 @@ echo Check for root ownership of /opt/mapr
 clush $parg 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'; echo $sep
 
 echo "Check for $serviceacct login"
-clush $parg -S "echo '$serviceacct account for MapR Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
+clush $parg $parg1 "echo '$serviceacct account for MapR Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
 echo $sep
 if [[ $(id -u) -ne 0 || "$SUDO" =~ .*sudo.* ]]; then
    echo Must have root access or sudo rights to check $serviceacct limits
@@ -200,7 +202,7 @@ echo Check for $serviceacct user specific open file and process limits
 clush $parg "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -u'" ; echo $sep
 clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'" ; echo $sep
 echo Check for $serviceacct users java exec permission and version
-clush $parg -B "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
+clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
 echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
 clush $parg "${SUDO:-} ls ~$serviceacct/.ssh"; echo $sep
 #clush $parg 'ls -ld $(readlink -f /opt/mapr)'
