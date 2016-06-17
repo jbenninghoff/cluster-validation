@@ -23,12 +23,12 @@ if [ $MRV == "2" ] ; then
    HHOME=$(ls -d /opt/mapr/hadoop/hadoop-2*)
    HVER=${HHOME#*/hadoop-}
    TJAR=$(ls $HHOME/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-$HVER-*-tests.jar)
-   tdisks=$(maprcli dashboard info -json | grep total_disks| grep -o '[0-9][0-9]*')
+   tdisks=$(maprcli dashboard info -json |grep total_disks |grep -o '[0-9][0-9]*')
    # Use "mapreduce" properties to force <N> containers per available disk
    # Default is 1 (so map.disk=1 and nrFiles is tdisks*1 )
    # The intent is to create one 'wave' of map tasks with max containers per node utilized
    filesPerDisk=1
-   mapDisk=`echo "scale=2; 1 / $filesPerDisk" | bc`; echo $mapDisk
+   mapDisk=`echo "scale=2; 1 / $filesPerDisk" | bc`; echo Number of disks per Map task: $mapDisk
    hadoop jar $TJAR TestDFSIO \
       -Dmapreduce.job.name=DFSIO-write \
       -Dmapreduce.map.cpu.vcores=0 \
