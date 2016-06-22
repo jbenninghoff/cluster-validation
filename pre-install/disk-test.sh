@@ -70,8 +70,10 @@ find_unused_disks() {
       type pvdisplay &> /dev/null && pvdisplay $dev &> /dev/null && continue #if physical volume is part of LVM, skip device
       [[ $dev == *swap* ]] && continue #device name appears to be LVM swap device, skip device
       lsblk -nl $(readlink -f $dev) | grep -i swap && continue #Looks like might be swap device
-      #grep $dev /opt/mapr/conf/disktab &>/dev/null && continue #Looks like part of MapR disk set already
-      #lsof $dev && continue #Looks like something has device open
+      if [ "$disks" != "readtest" ]; then
+         grep $dev /opt/mapr/conf/disktab &>/dev/null && continue #Looks like part of MapR disk set already
+         lsof $dev && continue #Looks like something has device open
+      fi
       disklist="$disklist $dev"
    done
 
