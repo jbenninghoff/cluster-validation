@@ -30,7 +30,7 @@ if [ ! -d /opt/mapr ]; then
    clush $parg -S test -d /opt/mapr ||{ echo MapR not installed in node group $group; exit; }
 fi
 mrv=$(hadoop version |awk 'NR==1 {printf("%1.1s\n", $2)}')
-srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
+srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf || echo mapr) #guess at service acct if not found
 
 if [ $(id -u) -ne 0 -a $(id -un) != "$srvid" ]; then
    echo You must run this script as the MapR service account or root; exit
@@ -49,12 +49,13 @@ fi
 
 maprcli_check() {
    if ( ! type maprcli > /dev/null 2>&1 ); then #If maprcli not on this machine
-      node=$(nodeset -I0 -e $group)
+      node=$(nodeset -I0 -e @$group)
       [ -z "$node" ] && read -e -p 'maprcli node not found, enter host name that can run maprcli: ' node
       if ( ! ssh $node "type maprcli > /dev/null 2>&1" ); then
          echo maprcli not found on host $node, rerun with valid host name; exit
       fi
-      node="ssh -qtt $node" #Single node to run maprcli commands from
+      node="ssh -qtt $node " #Single node to run maprcli commands from
+      #chgu="su -u $srvid -c " # Run as service account
    fi
 }
 

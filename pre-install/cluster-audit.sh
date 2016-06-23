@@ -29,6 +29,7 @@ else
    parg="-b -g ${group:-all}"
    parg1="-S"
    parg2="-B"
+   parg3="-u 30"
    # Common arguments to pass in to clush execution
    #clcnt=$(nodeset -c @all)
    #parg="$parg -f $clcnt" #fanout set to cluster node count
@@ -68,13 +69,13 @@ fi
 
 
 sep='====================================================================='
-scriptdir="$(cd "$(dirname "$0")"; pwd -P)"
+str=$(printf %80s); str=${str// /=} #Substitue all blanks with = chars
 distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 
 
-echo ==================== Hardware audits ================================
+echo "#################### Hardware audits ################################"
 date; echo $sep
 # probe for system info ###############
 clush $parg ${SUDO:-} "echo DMI Sys Info:; dmidecode | grep -A2 '^System Information'"; echo $sep
@@ -123,7 +124,7 @@ clush $parg "echo 'Udev rules: '; ${SUDO:-} ls /etc/udev/rules.d"; echo $sep
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep -v mapper"
 
 echo
-echo ==================== Linux audits ================================
+echo "#################### Linux audits ################################"
 echo $sep
 clush $parg "cat /etc/*release | uniq"; echo $sep
 clush $parg "uname -srvm | fmt"; echo $sep
@@ -167,11 +168,11 @@ echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 1\nnet.ipv4.tcp_ret
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
 clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
 clush $parg 'echo "Disk Controller Max Transfer Size:"; files=$(ls /sys/block/{sd,xvd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
-clush $parg 'echo "Disk Controller Configued Transfer Size:"; files=$(ls /sys/block/{sd,xvd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg 'echo "Disk Controller Configured Transfer Size:"; files=$(ls /sys/block/{sd,xvd}*/queue/max_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
 echo Check Mounted FS
-clush $parg -u 30 "df -hT | cut -c22-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
+clush $parg $parg3 "df -hT | cut -c22-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
 echo Check for nosuid mounts #TBD add noexec check
-clush $parg -u 30 "mount | grep -e noexec -e nosuid | grep -v tmpfs |grep -v 'type cgroup'"; echo $sep
+clush $parg $parg3 "mount | grep -e noexec -e nosuid | grep -v tmpfs |grep -v 'type cgroup'"; echo $sep
 echo Check for /tmp permission 
 clush $parg "stat -c %a /tmp | grep 1777 || echo /tmp permissions not 1777" ; echo $sep
 echo Check for tmpwatch on NM local dir

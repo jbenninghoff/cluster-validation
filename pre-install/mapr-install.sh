@@ -14,7 +14,7 @@ usage() {
   echo "-s option for secure cluster installation"
   echo "-m option for MFS only cluster installation"
   echo "-a option for cluster with dedicated admin nodes not running nodemanager"
-  echo "-e option for to install on edge node (no fileserver). Can combine with -s"
+  echo "-e option for to install on edge node (no fileserver). Can combine with -s or -x"
   echo "-u option to upgrade existing cluster"
   echo "-x option to uninstall existing cluster, destroying all data!"
   exit 2
@@ -22,7 +22,7 @@ usage() {
 
 # Handle script options
 secure=false; mfs=false; uninstall=false; upgrade=false; admin=false; edge=false
-while getopts ":smuxa:" opt; do
+while getopts "smuxae" opt; do
   case $opt in
     s) secure=true; sopt="-S" ;;
     m) mfs=true ;;
@@ -35,16 +35,29 @@ while getopts ":smuxa:" opt; do
 done
 
 # Site specific variables
-clname='pslab1' #Name for the entire cluster, no spaces
+clname='jbsec' #Name for the entire cluster, no spaces
 admin1='jbenninghoff' #Non-root, non-mapr linux account which has a known password, needed to login to web ui
 mapruid=mapr; maprgid=mapr #MapR service account and group
 spwidth=4 #Storage Pool width
-#clargs='-o -qtt' #clush args needed by sudo
 [ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #Use sudo, assuming account has password-less sudo  (sudo -i)?
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
-maprver=5.1.0 #TBD: Grep repo file to confirm or alter
+maprver=v5.1.0 #TBD: Grep repo file to confirm or alter
+
+install-patch() { #Find, Download and install mapr-patch v5.1.x
+   inrepo=false; clush -S -B -g clstr ${SUDO:-} "yum info mapr-patch" && inrepo=true
+   if [ "$inrepo" == "true" ]; then
+      clush -v -g clstr ${SUDO:-} "yum -y install $patchrpm"
+   else
+      patchrpm=$(curl -s http://package.mapr.com/patches/releases/$maprver/redhat/ | grep -o -P -m1 mapr-patch-5.1.*?.rpm | sed -n 1p)
+      if [ $? -ne 0 ]; then
+         echo "Patch not found, patchrpm=$patchrpm"
+      else
+         clush -v -g clstr ${SUDO:-} "yum -y install http://package.mapr.com/patches/releases/$maprver/redhat/$patchrpm"
+      fi
+   fi
+}
 
 # Check cluster for pre-requisites
 #clush -S -B -g clstr 'test -f /opt/mapr/conf/disktab' && { echo MapR appears to be installed; exit 3; }
@@ -59,16 +72,18 @@ grep ^hist /etc/clustershell/groups || { echo clustershell group: hist undefined
 clush -S -B -g clstr id $admin1 || { echo $admin1 account does not exist on all nodes; exit 3; }
 clush -S -B -g clstr id $mapruid || { echo mapr account does not exist on all nodes; exit 3; }
 clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" || { echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit; exit 3; }
-clush -S -B -g clstr stat -c %a /tmp | grep -q 1777 || { echo Permissions not 1777 on /tmp on all nodes; exit 3; }
-clush -S -B -g clstr 'grep -qi mapr /etc/yum.repos.d/*' || { echo MapR repos not found; exit 3; }
-clush -S -B -g clstr 'grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
+clush -S -B -g clstr 'echo /tmp permissions; stat -c %a /tmp | grep -q 1777' || { echo Permissions not 1777 on /tmp on all nodes; exit 3; }
+clush -S -B -g clstr 'echo Check repo; grep -qi mapr /etc/yum.repos.d/*' || { echo MapR repos not found; exit 3; }
+clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
+
 
 if [ "$upgrade" == "true" ]; then
-   #Check current MapR state and version
-   source <(awk '/^ *cluster_checks1\(\)/,/^ *} *$/' mapr-audit.sh) #source cluster_checks1 function from mapr-audit.sh
-   cluster_checks1 || { echo Could not load cluster checks function; exit 4; }
-   clush -a -b ${SUDO:-} umount /mapr #unmounts all localhost loopback NFS mounts
-   clush -a -b ${SUDO:-} nfsstat -m #TBD: stop if other than loopback mounts found
+   #TBD: grep secure=true /opt/mapr/conf/mapr-clusters.conf && { cp ../post-install/mapr-audit.sh /tmp; sudo -u $mapruid -i /tmp/mapr-audit.sh; }
+   #sudo -u mapr bash -c : && RUNAS="sudo -u mapr"; $RUNAS bash <<EOF
+   #source <(awk '/^ *cluster_checks1\(\)/,/^ *} *$/' mapr-audit.sh) #source cluster_checks1 function from mapr-audit.sh
+   #cluster_checks1 || { echo Could not load cluster checks function; exit 4; }
+   clush -g clstr -b ${SUDO:-} umount /mapr #unmounts all localhost loopback NFS mounts
+   clush -g clstr -b ${SUDO:-} nfsstat -m #TBD: stop if other than loopback mounts found
    read -p "Press enter to continue or ctrl-c to abort" #TBD: exit if any mounts exist
 
    #Check repo version
@@ -80,90 +95,108 @@ if [ "$upgrade" == "true" ]; then
 
    # Check for active Yarn or JobTracker jobs
    # stop centralconfig
-   # stop ingest like Sqoop or Flume, maybe in crontab or Jensen
+   # stop ingest like Sqoop or Flume, maybe in crontab or Jensen or edge nodes
    # check machines for NFS mounts with 'nfsstat -m' or 'netstat -an | grep 2049' using clush -ab
-   #on all NFS client machines found, run lsof /mntpoint and/or fuser -c /mntpoint; stop or kill all procs using NFS
-   #Stop MapR
-   clush -a -b ${SUDO:-} service mapr-warden stop
+   # On all NFS client machines found, run lsof /mntpoint and/or fuser -c /mntpoint; stop or kill all procs using NFS
+   # Stop MapR
+   clush -g clstr -b ${SUDO:-} service mapr-warden stop
    clush -g zk -b ${SUDO:-} service mapr-zookeeper stop
-   clush -a -b ${SUDO:-} jps
-   clush -a -b ${SUDO:-} pkill -u $mapruid
-   clush -a -b ${SUDO:-} "ps ax | grep $mapruid"
+   clush -g clstr -b ${SUDO:-} jps
+   clush -g clstr -b ${SUDO:-} pkill -u $mapruid
+   clush -g clstr -b ${SUDO:-} "ps ax | grep $mapruid"
    read -p "If any $mapruid process still running, press ctrl-c to abort and kill all manually"
 
    #Backup conf files
    folder_list='conf/ hadoop/hadoop-*/etc/hadoop/ hadoop/hadoop-*/conf drill/drill-*/conf/ hbase/hbase-*/conf zkdata/ spark/spark-*/conf/ sqoop/sqoop-*/conf/ hive/hive-*/conf/ roles/'
-   clush -a -b ${SUDO:-} "cd /opt/mapr/ && tar cfz /tmp/mapr_configs-$(hostname -f)-$(date "+%Y-%m-%dT%H-%M%z").tgz ${folder_list}"
-   clush -a -b ${SUDO:-} "ls -l /tmp/mapr_configs*.tgz"
+   clush -g clstr -b ${SUDO:-} "cd /opt/mapr/ && tar cfz mapr_configs-$(hostname -f)-$(date "+%Y-%m-%dT%H-%M%z").tgz ${folder_list}"
+   clush -g clstr -b ${SUDO:-} "ls -l $PWD/mapr_configs*.tgz"
 
    #Remove mapr-patch
-   clush -a -b ${SUDO:-} yum -y erase mapr-patch
+   clush -g clstr -b ${SUDO:-} yum -y erase mapr-patch
 
    #Update all MapR RPMs on all nodes
    clush -v -g clstr ${SUDO:-} "yum -y update mapr-\*" #Exclude specific rpms with --exclude=mapr-some-somepackage
    read -p "Check console for errors.  If none, press enter to continue or ctrl-c to abort"
 
    #Download and install mapr-patch
-   inrepo=false; clush -S -B -g clstr ${SUDO:-} "yum info mapr-patch" && inrepo=true
-   if [ "$inrepo" == "true" ]; then
-      clush -v -g clstr ${SUDO:-} "yum -y install mapr-patch"
-   else
-      patchrpm=$(curl -s http://package.mapr.com/patches/releases/$maprver/redhat/ | grep -o -P -m1 mapr-patch-5.1.*?.rpm | sed -n 1p)
-      #TBD: Pause if patch not found, use read -p
-      clush -v -g clstr ${SUDO:-} "yum -y install http://package.mapr.com/patches/releases/$maprver/redhat/$patchrpm"
-   fi
+   install-patch
 
    #Run configure.sh -R to insure configuration is updated
-   clush -a -b ${SUDO:-} /opt/mapr/server/configure.sh -R
+   clush -g clstr -b ${SUDO:-} /opt/mapr/server/configure.sh -R
    #TBD: modify yarn-site.xml and mapred-site.xml and container-executor.cfg
 
    #Start rpcbind, zk and warden
-   clush -a -b ${SUDO:-} service rpcbind restart
+   clush -g clstr -b ${SUDO:-} service rpcbind restart
    clush -g zk -b ${SUDO:-} service mapr-zookeeper start
    sleep 9
    clush -g zk -b ${SUDO:-} service mapr-zookeeper qstatus
-   clush -a -b ${SUDO:-} service mapr-warden start
-   sleep 90; maprcli config save -values {mapr.targetversion:"`cat /opt/mapr/MapRBuildVersion`"}
-   maprcli cluster feature enable -all
+   clush -g clstr -b ${SUDO:-} service mapr-warden start
+   sleep 90
+   #TBD: maprcli must be done by mapr service acct on secure cluster which requires ticket
+   sudo -u mapr maprcli config save -values {mapr.targetversion:"`cat /opt/mapr/MapRBuildVersion`"}
+   sudo -u mapr maprcli cluster feature enable -all
    exit
 fi
 
-if [ "$uninstall" == "true" ]; then
+if [ "$uninstall" == "true" -a "$edge" == "false" ]; then
    maprcli dashboard info -json |awk '/"disk_space":{/,/}/'
    read -p "All data will be lost, press enter to continue or ctrl-c to abort"
-   clush $clargs -a -b ${SUDO:-} umount /mapr
-   clush $clargs -a -b ${SUDO:-} service mapr-warden stop
+   clush $clargs -g clstr -b ${SUDO:-} umount /mapr
+   clush $clargs -g clstr -b ${SUDO:-} service mapr-warden stop
    clush $clargs -g zk -b ${SUDO:-} service mapr-zookeeper stop
-   clush $clargs -a -b ${SUDO:-} jps
-   clush $clargs -a -b ${SUDO:-} pkill -u $mapruid
-   clush $clargs -a -b "${SUDO:-} ps ax | grep $mapruid"
+   clush $clargs -g clstr -b ${SUDO:-} jps
+   clush $clargs -g clstr -b ${SUDO:-} pkill -u $mapruid
+   clush $clargs -g clstr -b "${SUDO:-} ps ax | grep $mapruid"
    read -p "If any $mapruid process is still running, press ctrl-c to abort and kill all manually"
-   #TBD: Use read to ask to proceed with positive response, like Y, before data destroyed.
+
+   shopt -s nocasematch
+   while read -p "Enter yes to continue and remove all mapr packages and /opt/mapr: "; do
+      [[ "$REPLY" == "yes" ]] && break
+   done
+
    case $distro in
       redhat|centos|red*)
-         clush $clargs -a -b "${SUDO:-} yum -y erase mapr-\*" ;;
+         clush $clargs -g clstr -b "${SUDO:-} yum -y erase mapr-\*" ;;
       ubuntu)
-         clush -a -B 'dpkg -P mapr-\*' ;;
+         clush -g clstr -B 'dpkg -P mapr-\*' ;;
       *) echo Unknown Linux distro! $distro; exit ;;
    esac
-   clush $clargs -a -b ${SUDO:-} rm -rf /opt/mapr
+   clush $clargs -g clstr -b ${SUDO:-} rm -rf /opt/mapr
    exit
 fi
 
 if [ "$edge" == "true" ]; then
-   clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-core mapr-nfs" #Enables edge node to use warden to run HS2, Metastore, etc
-   #TBD: install-patch function
-   if [ "$secure" == "true" ]; then
-      scp "$cldb1:/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
-      clush -g edge -c ssl_truststore --dest /opt/mapr/conf/
-      clush -g edge -c ssl_keystore --dest /opt/mapr/conf/
-      clush -g edge -c maprserverticket --dest /opt/mapr/conf/
-      clush $clargs -g edge "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}"
-      clush $clargs -g edge "${SUDO:-} chmod 600 /opt/mapr/conf/{ssl_keystore,maprserverticket}"
-      clush $clargs -g edge "${SUDO:-} chmod 644 /opt/mapr/conf/ssl_truststore"
+   grep ^edge /etc/clustershell/groups || { echo clustershell group: edge undefined; exit 1; }
+   if [ "$uninstall" == "true" ]; then
+      clush $clargs -g edge -b ${SUDO:-} umount /mapr
+      clush $clargs -g edge -b ${SUDO:-} service mapr-warden stop
+      clush $clargs -g edge -b ${SUDO:-} service mapr-posix-client-basic stop
+      clush $clargs -g edge -b ${SUDO:-} jps
+      clush $clargs -g edge -b ${SUDO:-} pkill -u $mapruid
+      clush $clargs -g edge -b "${SUDO:-} ps ax | grep $mapruid"
+      read -p "If any $mapruid process is still running, press ctrl-c to abort and kill all manually"
+      clush $clargs -g edge -b "${SUDO:-} yum -y erase mapr-\*"
+      clush $clargs -g edge -b ${SUDO:-} rm -rf /opt/mapr
+      exit
+   else
+      #clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-client mapr-posix-client-basic"; clnt="-c " #Edge node LBrands
+      clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-core mapr-posix-client-basic" #Enables edge node to use warden to run HS2,Metastore,etc
+      #clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-client mapr-nfs" #Enables edge node as simple client with loopback NFS to maprfs
+      #If mapr-core installed, install-patch?
+      if [ "$secure" == "true" ]; then
+         scp "$cldb1:/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
+         clush -g edge -c ssl_truststore --dest /opt/mapr/conf/
+         clush -g edge -c ssl_keystore --dest /opt/mapr/conf/
+         clush -g edge -c maprserverticket --dest /opt/mapr/conf/
+         clush $clargs -g edge "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}"
+         clush $clargs -g edge "${SUDO:-} chmod 600 /opt/mapr/conf/{ssl_keystore,maprserverticket}"
+         clush $clargs -g edge "${SUDO:-} chmod 644 /opt/mapr/conf/ssl_truststore"
+      fi
+      clush -S $clargs -g edge "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid ${sopt:-} $clnt" # v4.1+ use RM zeroconf, no -RM option 
+      chmod u+s /opt/mapr/bin/fusermount
+      echo Edit /opt/mapr/conf/fuse.conf. Append mapr ticket file path 
+      exit
    fi
-   clush -S $clargs -g edge "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart ${sopt:-}" # v4.1+ use RM zeroconf, no -RM option 
-   exit
 fi
 
 clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
@@ -188,14 +221,7 @@ clush $clargs -v -g zk "${SUDO:-} yum -y install mapr-zookeeper" #3 zookeeper no
 clush $clargs -v -g cldb "${SUDO:-} yum -y install mapr-cldb mapr-webserver" # 3 cldb nodes for ha, 1 does writes, all 3 do reads
 
 #Download and install mapr-patch
-inrepo=false; clush -S -B -g clstr ${SUDO:-} "yum info mapr-patch" && inrepo=true
-if [ "$inrepo" == "true" ]; then
-   clush -v -g clstr ${SUDO:-} "yum -y install $patchrpm"
-else
-   patchrpm=$(curl -s http://package.mapr.com/patches/releases/$maprver/redhat/ | grep -o -P -m1 mapr-patch-5.1.*?.rpm | sed -n 1p)
-   #TBD: Pause if patch not found, use read -p
-   clush -v -g clstr ${SUDO:-} "yum -y install http://package.mapr.com/patches/releases/$maprver/redhat/$patchrpm"
-fi
+install-patch
 
 # service layout option #1 ====================
 # admin services layered over data nodes defined in rm and cldb groups
