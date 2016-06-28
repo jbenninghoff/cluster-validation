@@ -150,13 +150,13 @@ if [ "$uninstall" == "true" -a "$edge" == "false" ]; then
    read -p "If any $mapruid process is still running, press ctrl-c to abort and kill all manually"
 
    shopt -s nocasematch
-   while read -p "Enter yes to continue and remove all mapr packages and /opt/mapr: "; do
+   while read -p "Enter 'yes' to remove all mapr packages and /opt/mapr: "; do
       [[ "$REPLY" == "yes" ]] && break
    done
 
    case $distro in
       redhat|centos|red*)
-         clush $clargs -g clstr -b "${SUDO:-} yum -y erase mapr-\*" ;;
+         clush $clargs -g clstr -b ${SUDO:-} "yum clean all; yum -y erase mapr-\*" ;;
       ubuntu)
          clush -g clstr -B 'dpkg -P mapr-\*' ;;
       *) echo Unknown Linux distro! $distro; exit ;;
@@ -173,9 +173,9 @@ if [ "$edge" == "true" ]; then
       clush $clargs -g edge -b ${SUDO:-} service mapr-posix-client-basic stop
       clush $clargs -g edge -b ${SUDO:-} jps
       clush $clargs -g edge -b ${SUDO:-} pkill -u $mapruid
-      clush $clargs -g edge -b "${SUDO:-} ps ax | grep $mapruid"
+      clush $clargs -g edge -b ${SUDO:-} "ps ax | grep $mapruid"
       read -p "If any $mapruid process is still running, press ctrl-c to abort and kill all manually"
-      clush $clargs -g edge -b "${SUDO:-} yum -y erase mapr-\*"
+      clush $clargs -g edge -b ${SUDO:-} "yum clean all; yum -y erase mapr-\*"
       clush $clargs -g edge -b ${SUDO:-} rm -rf /opt/mapr
       exit
    else

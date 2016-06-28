@@ -16,12 +16,13 @@ the MapR software and configuring a cluster.  Post-install tests
 help assure that the cluster is in good working order and ready 
 to hand over to your production team.
 
-Install clustershell (rpm provided, also available via EPEL) on a machine
-with password-less ssh to all other cluster nodes.  If using a
-non-root account, then non-root account must have password-less
-sudo rights configured in /etc/sudoers.  Update the file
-`/etc/clustershell/groups` to include an entry for "all" matching a
-pattern or patterns of host names in your cluster.  For example;
+Install clustershell (rpm provided in pre-install folder, also
+available via EPEL) on a machine with password-less ssh to all other
+cluster nodes.  If using a non-root account, then non-root account
+must have password-less sudo rights configured in /etc/sudoers.
+Update the file `/etc/clustershell/groups` to include an entry for
+"all" matching a pattern or patterns of host names in your cluster.
+For example;
 
     all: node[0-10]
 Verify clush works correctly by running:

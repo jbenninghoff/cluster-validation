@@ -4,14 +4,6 @@
 [ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
 
-isdigit() { # Tests for integer variable. Needed in getopts loop
-[ $# -ne 1 ] && return 1
-case $1 in
-  *[!0-9]*|"") return 1 ;;
-            *) return 0 ;;
-esac
-}
-
 usage() {
 cat - << 'EOF'
 This script uses iozone to measure disk and disk controller bandwidth.
@@ -50,7 +42,7 @@ while getopts "asdrz:-:" opt; do
         a) disks=all ;;
         s) seq=true ;;
         r) disks=readtest ;;
-        z) if isdigit ${OPTARG}; then size=${OPTARG}; else { echo ${OPTARG} not an integer; exit; }; fi  ;;
+        z) if [[ "${OPTARG}" =~ ^[0-9]+$ ]]; then size=${OPTARG}; else { echo ${OPTARG} not an integer; exit; }; fi  ;;
         d) DBG=true ;; # Enable debug statements
         *) echo "Invalid option -${OPTARG}" >&2; usage ;;
     esac
