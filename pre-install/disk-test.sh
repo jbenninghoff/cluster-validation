@@ -52,7 +52,8 @@ done
 find_unused_disks() {
    [ -n "$DBG" ] && set -x
    disklist=""
-   fdisks=`fdisk -l 2>/dev/null |grep "^Disk .* bytes$"|awk '{print $2}'|sort`
+   #fdisks=`fdisk -l 2>/dev/null |grep "^Disk .* bytes$"|awk '{print $2}'|sort`
+   fdisks=$(fdisk -l | awk '/^Disk .* bytes/{print $2}')
    for d in $fdisks; do
       dev=${d%:} #strip colon off the dev path string
       [ -n "$DBG" ] && echo Checking Device: $dev
