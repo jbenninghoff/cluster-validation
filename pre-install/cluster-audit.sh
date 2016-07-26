@@ -45,7 +45,7 @@ if [ -d /opt/mapr ]; then
 else
    echo MapR not installed locally!
    serviceacct=mapr #guess
-   clush -g ${group:-all} $parg1 test -d /opt/mapr || echo MapR not installed in node group $group
+   clush $parg $parg1 test -d /opt/mapr || echo MapR not installed in node group $group
 fi
 [ -n "$DBG" ] && echo serviceacct: $serviceacct
 
