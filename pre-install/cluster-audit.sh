@@ -26,6 +26,7 @@ if ! type clush >& /dev/null; then
 else
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
    #grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
+   #clush specific arguments
    parg="-b -g ${group:-all}"
    parg1="-S"
    parg2="-B"
@@ -94,7 +95,6 @@ clush $parg "cat /proc/meminfo | grep -i ^memt | uniq"; echo $sep
 clush $parg "echo -n 'DIMM slots: '; ${SUDO:-} dmidecode -t memory |grep -c '^[[:space:]]*Locator:'"; echo $sep
 clush $parg "echo -n 'DIMM count is: '; ${SUDO:-} dmidecode -t memory | grep -c '^[[:space:]]Size: [0-9][0-9]*'"; echo $sep
 clush $parg ${SUDO:-} "echo DIMM Details; dmidecode -t memory | awk '/Memory Device$/,/^$/ {print}' | grep -e '^Mem' -e Size: -e Speed: -e Part | sort -u | grep -v -e 'NO DIMM' -e 'No Module Installed' -e 'Not Specified'"; echo $sep
-[ -n "$DBG" ] && exit
 
 # probe for nic info ###############
 #clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed -e detected" 
@@ -155,7 +155,7 @@ case $distro in
       #clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
       #clush $parg "echo Required RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done | sort" ; echo $sep
-      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils"
+      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils iftop, ntop, iotop, atop, iotop"
       clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
       #clush $parg "echo Missing RPMs: ; for each in $pkgs; do rpm -q \$each | grep 'is not installed'; done |sort" ; echo $sep
    ;;
@@ -167,10 +167,11 @@ clush $parg "${SUDO:-} echo 'Sysctl Values: '; sysctl vm.swappiness net.ipv4.tcp
 echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 1\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"; echo $sep
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
 clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
-clush $parg 'echo "Disk Controller Max Transfer Size:"; files=$(ls /sys/block/{sd,xvd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
-clush $parg 'echo "Disk Controller Configured Transfer Size:"; files=$(ls /sys/block/{sd,xvd}*/queue/max_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg 'echo "Disk Controller Max Transfer Size:"; files=$(ls /sys/block/{sd,xvd,vd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg 'echo "Disk Controller Configured Transfer Size:"; files=$(ls /sys/block/{sd,xvd,vd}*/queue/max_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
 echo Check Mounted FS
-clush $parg $parg3 "df -hT | cut -c22-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
+clush $parg $parg3 "df -h --output=fstype,size,pcent,target -x tmpfs -x devtmpfs"; echo $sep
+#clush $parg $parg3 "df -hT | cut -c22-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep
 echo Check for nosuid mounts #TBD add noexec check
 clush $parg $parg3 "mount | grep -e noexec -e nosuid | grep -v tmpfs |grep -v 'type cgroup'"; echo $sep
 echo Check for /tmp permission 
@@ -195,7 +196,7 @@ clush $parg 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'; echo $sep
 echo "Check for $serviceacct login"
 clush $parg $parg1 "echo '$serviceacct account for MapR Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
 echo $sep
-if [[ $(id -u) -ne 0 || "$SUDO" =~ .*sudo.* ]]; then
+if [[ $(id -un) != $serviceacct && $(id -u) -ne 0 || "$SUDO" =~ .*sudo.* ]]; then
    echo Must have root access or sudo rights to check $serviceacct limits
    exit
 fi
@@ -205,7 +206,7 @@ clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $servi
 echo Check for $serviceacct users java exec permission and version
 clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
 echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
-clush $parg "${SUDO:-} ls ~$serviceacct/.ssh"; echo $sep
+clush $parg "${SUDO:-} ls ~$serviceacct/.ssh/authorized_keys*"; echo $sep
 #clush $parg 'ls -ld $(readlink -f /opt/mapr)'
 #clush $parg 'ls -ld $(readlink -f /opt/mapr) | awk "\$3!=\"root\" || \$4!=\"root\" {print \"/opt/mapr not owned by root:root!!\"}"'
 #echo 'Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)'

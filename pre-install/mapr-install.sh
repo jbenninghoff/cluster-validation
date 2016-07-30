@@ -78,9 +78,9 @@ clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*'
 
 
 if [ "$upgrade" == "true" ]; then
-   #TBD: grep secure=true /opt/mapr/conf/mapr-clusters.conf && { cp ../post-install/mapr-audit.sh /tmp; sudo -u $mapruid -i /tmp/mapr-audit.sh; }
+   #TBD: grep secure=true /opt/mapr/conf/mapr-clusters.conf && { cp ../post-install/mapr-audit.sh /tmp; sudo -u $mapruid /tmp/mapr-audit.sh; }
    #sudo -u mapr bash -c : && RUNAS="sudo -u mapr"; $RUNAS bash <<EOF
-   #source <(awk '/^ *cluster_checks1\(\)/,/^ *} *$/' mapr-audit.sh) #source cluster_checks1 function from mapr-audit.sh
+   #source <(sed -n '/^ *cluster_checks1()/,/^ *} *$/p' mapr-audit.sh) #source cluster_checks1 function from mapr-audit.sh
    #cluster_checks1 || { echo Could not load cluster checks function; exit 4; }
    clush -g clstr -b ${SUDO:-} umount /mapr #unmounts all localhost loopback NFS mounts
    clush -g clstr -b ${SUDO:-} nfsstat -m #TBD: stop if other than loopback mounts found
@@ -148,6 +148,8 @@ if [ "$uninstall" == "true" -a "$edge" == "false" ]; then
    clush $clargs -g clstr -b ${SUDO:-} pkill -u $mapruid
    clush $clargs -g clstr -b "${SUDO:-} ps ax | grep $mapruid"
    read -p "If any $mapruid process is still running, press ctrl-c to abort and kill all manually"
+   cp /opt/mapr/conf/disktab /var/tmp/
+   echo Copy of disktab saved to /var/tmp/
 
    shopt -s nocasematch
    while read -p "Enter 'yes' to remove all mapr packages and /opt/mapr: "; do

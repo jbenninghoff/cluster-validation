@@ -34,17 +34,17 @@ disks=unused; seq=false; size=4; DBG=''
 while getopts "asdrz:-:" opt; do
     case $opt in
         -)
-            case "${OPTARG}" in
+            case "$OPTARG" in
                 all) disks=all ;; #Show all disks, not just umounted/unused disks
                 destroy) disks=destroy ;; #Run iozone on all unused disks, destroying data
-                *) echo "Invalid option --${OPTARG}" >&2; usage ;;
+                *) echo "Invalid option --$OPTARG" >&2; usage ;;
             esac;;
         a) disks=all ;;
         s) seq=true ;;
         r) disks=readtest ;;
-        z) if [[ "${OPTARG}" =~ ^[0-9]+$ ]]; then size=${OPTARG}; else { echo ${OPTARG} not an integer; exit; }; fi  ;;
+        z) if [[ "$OPTARG" =~ ^[0-9]+$ ]]; then size=$OPTARG; else { echo $OPTARG is not an integer; exit; }; fi  ;;
         d) DBG=true ;; # Enable debug statements
-        *) echo "Invalid option -${OPTARG}" >&2; usage ;;
+        *) echo "Invalid option -$OPTARG" >&2; usage ;;
     esac
 done
 #[ -n "$DBG" ] && exit
@@ -67,7 +67,7 @@ find_unused_disks() {
          grep $dev /opt/mapr/conf/disktab &>/dev/null && continue #Looks like part of MapR disk set already
          lsof $dev && continue #Looks like something has device open
       fi
-      disklist="$disklist $dev"
+      disklist="$disklist $dev" #Survived all filters, add it to the list of unused disks
    done
 
    [ -n "$DBG" ] && echo MD check loop
