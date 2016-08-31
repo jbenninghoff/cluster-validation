@@ -1,24 +1,31 @@
 #!/bin/bash
 # jbenninghoff 2013-Jun-07  vi: set ai et sw=3 tabstop=3:
 
-cat - << 'EOF'
-# MapR rpc test to validate network bandwidth using cluster bisection strategy
-# One half of the nodes act as clients by sending load to other half of the nodes acting as servers.
-# The throughput between each pair of nodes is reported.
-# When run concurrently (the default case), load is also applied to the network switch(s).
-# Use -m option to run tests on multiple server NICs
-# Use -s option to run tests in seqential mode
-# Use -i option to run iperf test instead of rpctest
-# Use -z option to specify size of test in MB (default==5000)
+cat << EOF
+MapR rpc test to validate network bandwidth using cluster bisection strategy
+One half of the nodes act as clients by sending load to other half of the nodes acting as servers.
+The throughput between each pair of nodes is reported.
+When run concurrently (the default case), load is also applied to the network switch(s).
+Use -m option to run tests on multiple server NICs
+Use -s option to run tests in seqential mode
+Use -i option to run iperf test instead of rpctest
+Use -x option to run 2nd stream from client to measure bonding/teaming NICs
+Use -z option to specify size of test in MB (default==5000)
+Use -r option to specify reverse sort order of IP addresses, good check for firewall blockage
+Use -R option to specify random sort order of IP addresses, good check for firewall blockage
 EOF
 read -p "Press enter to continue or ctrl-c to abort"
 
-concurrent=true; runiperf=false; multinic=false size=5000
-while getopts ":simz:" opt; do
+concurrent=true; runiperf=false; multinic=false; size=5000; sortopt=''; DBG=''; xtra=false
+while getopts "xdsimrRz:" opt; do
   case $opt in
+    d) DBG=true ;;
     s) concurrent=false ;;
     i) runiperf=true ;;
+    x) xtra=true ;;
     m) multinic=true ;;
+    r) sortopt="-$opt" ;; #Reverse order
+    R) sortopt="-$opt" ;; #Random order
     z) size=$OPTARG ;;
     \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
   esac
@@ -32,31 +39,62 @@ rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
 rpctestbin=$scriptdir/rpctest #Packaged version
 tmpfile=$(mktemp); trap 'rm $tmpfile' 0 1 2 3 15
 
-#############################################################
-if [ $multinic == "true" ]; then # Capture multiple NIC addrs on servers
-   clush -aN hostname -I | sort -n > $tmpfile || { echo Unable to acquire IP addresses with clush, check clush config; exit 2; }
-   hcount=$(cat $tmpfile | wc -l)
-   multinics=($(sed -n "1,$(($hcount/2))s/ /,/p" $tmpfile)) #comma sep for rpctest
+# Generate a host list array
+if type nodeset >& /dev/null; then
+   hostlist=( $(nodeset -e @all) ) #Host list in bash array
+elif [ -f ~/host.list ]; then
+   hostlist=( $(< ~/host.list) )
+else
+   echo "This test requires a host list via clush/nodeset or ~/host.list " >&2; exit
+fi
+#echo hostlist: ${hostlist[@]}
+# Generate an ip list array
+for host in ${hostlist[@]}; do
+   iplist+=( $(ssh $host hostname -i) )
+done
+echo iplist: ${iplist[@]}
+
+# Capture multiple NIC addrs on servers
+if [ $multinic == "true" ]; then
+   for host in ${hostlist[@]}; do
+      iplist2+=( $(ssh $host "hostname -I |sed 's/ /,/g'") )
+   done #comma sep pair in bash array
+   len=${#iplist2[@]}; ((len=len/2)); ((len--))
+   multinics=( ${iplist2[@]:0:$len} ) #extract first half of array (servers for rpctest)
+echo multinics: ${multinics[@]}
 fi
 
-# Generate the bash arrays with IP address values using clush
-clush -aN hostname -i | sort -n > $tmpfile || { echo Unable to acquire IP addresses with clush, check clush config; exit 2; }
-hcount=$(cat $tmpfile | wc -l)
-half1=($(sed -n "1,$(($hcount/2))p" $tmpfile))
-half2=($(sed -n "$(($hcount/2+1)),\$p" $tmpfile))
-# Tar up any previous log files
-tmp=${half2[@]}
-clush -w ${tmp// /,} 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); [ -n "$files" ] && { tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }'
-if [ $(($hcount & 1)) -eq 1 ]; then 
-   extraip=$(sed -n '$p' $tmpfile)
+# Generate the bash arrays with IP address values using array extraction
+len=${#iplist[@]}; ((len=len/2))
+half1=( ${iplist[@]:0:$len} ) #extract first half of array (servers)
+half2=( ${iplist[@]:$len} ) #extract second half of array (clients)
+echo half1: ${half1[@]}
+echo half2: ${half2[@]}
+# Tar up old log files
+for host in ${half2[@]}; do
+   ssh $host 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); [ -n "$files" ] && { tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }'
+done
+
+# Sort client list
+if [ -n $sortopt ]; then
+   readarray -t sortlist < <(printf '%s\n' "${half2[@]}" | sort $sortopt)
+   half2=( "${sortlist[@]}" )
+   echo Sorted half2: ${half2[@]}
+fi
+
+# Handle uneven host count for $half2 array, save and strip last element
+len=${#half2[@]}
+if [ $(($len & 1)) -eq 1 ]; then 
    echo Uneven IP address count, removing extra client IP
-   sed -i '$d' $tmpfile
+   (( len-- ))
+   extraip=${half2[$len]}; echo extraip: $extraip
+   #(( len-- )); echo len: $len
+   half2=( ${half2[@]:0:$len} )
 fi
-hcount=$(cat $tmpfile | wc -l) #Redefine after $extraip removed
-half2=($(sed -n "$(($hcount/2+1)),\$p" $tmpfile)) #Redefine after $extraip del
+echo half2: ${half2[@]}
 
-#############################################################
-# Manually define array of server hosts (half of all hosts in cluster)
+##### Servers ###############################################
+# Manually define array of server hosts if not using clush/nodeset (half of all hosts in cluster)
 #  NOTE: use IP addresses to ensure specific NIC utilization
 #half1=(10.10.100.165 10.10.100.166 10.10.100.167)
 
@@ -71,7 +109,7 @@ done
 echo Servers have been launched
 sleep 9 # let the servers stabilize
 
-#############################################################
+##### Clients ###############################################
 # Manually define 2nd array of client hosts (other half of all hosts in cluster)
 #  NOTE: use IP addresses to ensure specific NIC utilization
 #half2=(10.10.100.168 10.10.100.169 10.10.100.169)
@@ -81,27 +119,27 @@ for node in "${half2[@]}"; do
   case $concurrent in #convert case block to if/else block
      true)
        if [ $runiperf == "true" ]; then
-         #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -w 16K > server-${half1[$i]}-iperf.log" & #16K socket buffer/window size MapR uses
-         ssh -n $node "$iperfbin -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" &  #Small initial test, increase -t value for better test
+         #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -w 16K > ${half1[$i]}---$node-iperf.log" & #16K window size MapR uses
+         ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M > ${half1[$i]}---$node-iperf.log" &  #increase -n value 10x for better test
        else
          if [ $multinic == "true" ]; then
-            ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > server-${half1[$i]}-rpctest.log" &
+            ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log" &
          else
-            ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log" & #Small initial test, increase 5000 by 10x or 50x
+            ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log" & #increase -n value 10x for better test
          fi
        fi
-       #catch all client PIDs ($!)
-       clients="$clients $!"
+       clients="$clients $!" #catch all client PIDs ($!)
        ;;
      false) #Sequential mode can be used to help isolate NIC and cable issues
        if [ $runiperf == "true" ]; then
-         #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -i3 -w 16K > server-${half1[$i]}-iperf.log" # 16K socket buffer/window size MapR uses
-         ssh -n $node "$iperfbin -c ${half1[$i]} -t 9 -i3 > server-${half1[$i]}-iperf.log" # Small initial test, increase -t value for better test
+         [ $xtra == true ] && ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -i3 > ${half1[$i]}---$node-s2-iperf.log" &
+         ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -i3 > ${half1[$i]}---$node-iperf.log" #increase -n value 10x for better test
        else
          if [ $multinic == "true" ]; then
-            ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > server-${half1[$i]}-rpctest.log"
+            ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log"
          else
-            ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log"
+            [ $xtra == true ] && ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log" &
+            ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log"
          fi
        fi
 
@@ -115,15 +153,17 @@ for node in "${half2[@]}"; do
 done
 [ $concurrent == "true" ] && echo Clients have been launched
 [ $concurrent == "true" ] && { echo Waiting for PIDS: $clients; wait $clients; } #Wait for all clients to finish in concurrent run
+echo Wait over
 sleep 5
 
-# Handle the odd numbered node count (extra node)
+# Handle the odd numbered node count case (extra node)
 if [ -n "$extraip" ]; then 
+   echo Measuring extra IP address
    ((i--)) #decrement to reuse last server in server list $half1
    if [ $runiperf == "true" ]; then
-      ssh -n $extraip "$iperfbin -c ${half1[$i]} -t 9 > server-${half1[$i]}-iperf.log" #Small initial test, increase -t value for better test
+      ssh -n $extraip "$iperfbin -c ${half1[$i]} -n ${size}M > ${half1[$i]}---$extraip-iperf.log" #Small initial test, increase size for better test
    else
-      ssh -n $extraip "$rpctestbin -client -b 32 $size ${half1[$i]} > server-${half1[$i]}-rpctest.log"
+      ssh -n $extraip "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$extraip-rpctest.log"
    fi
 fi
 
@@ -134,13 +174,13 @@ tmp=${half2[@]}
 echo
 [ $concurrent == "true" ] && echo Concurrent network throughput results || echo Sequential network throughput results
 if [ $runiperf == "true" ]; then
-   clush -w ${tmp// /,} grep -i -h -e ^ \*-iperf.log # Print the measured bandwidth (string TBD)
+   for host in $tmp; do ssh $host 'grep -i -h -e ^ *-iperf.log'; done # Print the measured bandwidth (string TBD)
    tmp=${half1[@]}
-   clush -w ${tmp// /,} pkill iperf #Kill the servers
+   for host in $tmp; do ssh $host pkill iperf; done #Kill the servers
 else
-   clush -w ${tmp// /,} grep -i -H -e ^Rate -e error \*-rpctest.log #Print the network bandwidth (mb/s is MB/sec), 1GbE=125MB/s, 10GbE=1250MB/s
+   for host in $tmp; do ssh $host 'grep -i -H -e ^Rate -e error *-rpctest.log'; done #Print the network bandwidth (mb/s is MB/sec), 1GbE=125MB/s, 10GbE=1250MB/s
    tmp=${half1[@]}
-   clush -w ${tmp// /,} pkill rpctest #Kill the servers
+   for host in $tmp; do ssh $host pkill rpctest; done #Kill the servers
 fi
 
 # Unlike most Linux commands, option order is important for rpctest, -port must be used before other options

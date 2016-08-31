@@ -10,14 +10,16 @@ MapR Install methods:
 --BLOCK-COMMENT--
 
 usage() {
-  echo "Usage: $0 -s -m -u -x -a -e"
-  echo "-s option for secure cluster installation"
-  echo "-m option for MFS only cluster installation"
-  echo "-a option for cluster with dedicated admin nodes not running nodemanager"
-  echo "-e option for to install on edge node (no fileserver). Can combine with -s or -x"
-  echo "-u option to upgrade existing cluster"
-  echo "-x option to uninstall existing cluster, destroying all data!"
-  exit 2
+cat << EOF
+Usage: $0 -s -m -u -x -a -e
+-s option for secure cluster installation
+-m option for MFS only cluster installation
+-a option for cluster with dedicated admin nodes not running nodemanager
+-e option for to install on edge node (no fileserver). Can combine with -s or -x
+-u option to upgrade existing cluster
+-x option to uninstall existing cluster, destroying all data!
+EOF
+exit 2
 }
 
 # Handle script options
