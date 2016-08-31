@@ -5,7 +5,7 @@
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
 
 usage() {
-cat - << 'EOF'
+cat << EOF
 This script uses iozone to measure disk and disk controller bandwidth.
 These tests are DESTRUCTIVE therefore they must be run BEFORE 
 formatting the devices for the MapR filesystem (disksetup -F ...)
