@@ -16,6 +16,7 @@ while getopts ":dg:" opt; do
   case $opt in
     d) DBG=true ;;
     g) group=$OPTARG ;;
+    u) cuser=$OPTARG ;;
     \?) echo "Invalid option: -$OPTARG" >&2; usage ;;
   esac
 done
@@ -29,11 +30,11 @@ else
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
    #grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
    #clush specific arguments TBD: -l mapr when run from Mac
-   parg="-l mapr -b -g ${group:-all}"
+   parg="-b -g ${group:-all}"
    parg1="-S"
    parg2="-B"
    parg3="-u 30"
-   parg4="-l mapr -g ${group:-all}"
+   parg4="-g ${group:-all}"
    node=$(nodeset -I0 -e @${group:-all})
    parg5="-w $node -o -qtt"
    node=mapr@$(nodeset -I0 -e @${group:-all})
