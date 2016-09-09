@@ -16,12 +16,12 @@ the MapR software and configuring a cluster.  Post-install tests
 help assure that the cluster is in good working order and ready 
 to hand over to your production team.
 
-Install clustershell (rpm provided in pre-install folder, also
-available via EPEL) on a machine with password-less ssh to all other
-cluster nodes.  If using a non-root account, then non-root account
-must have password-less sudo rights configured in /etc/sudoers.
-Update the file `/etc/clustershell/groups` to include an entry for
-"all" matching a pattern or patterns of host names in your cluster.
+Install clustershell (rpm available via EPEL) on a machine with
+password-less ssh to all other cluster nodes.  If using a non-root
+account, then non-root account must have password-less sudo rights
+configured in /etc/sudoers.  Update the file `/etc/clustershell/groups`
+to include an entry for "all" matching a pattern or patterns of
+host names in your cluster.
 For example;
 
     all: node[0-10]
@@ -33,7 +33,7 @@ Compare results with:
 Complete documentation for clush and clustershell can be found here:
 http://clustershell.readthedocs.org/en/latest/tools/clush.html
 
-Download and extract the cluster-validation package with a command like this:
+Next, download and extract the cluster-validation package with a command like this:
 
     curl -L -o cluster-validation.tgz http://github.com/jbenninghoff/cluster-validation/tarball/master
 Extract with tar in /root or your home folder and rename the top level folder like this:  
@@ -160,9 +160,9 @@ benchmarks volume before running any of the post install benchmarks.
 The post-install folder also contains a mapr-audit.sh script which
 can be run to provide an audit log of the MapR configuration.  The
 script contains a useful set of example maprcli commands. There are
-also example install, upgrade and un-install scripts that leverage
-clush to run quickly on an entire set of nodes or cluster.  None
-of those will run without editing, so read the scripts carefully
-to understand how to edit them with site specific info.
+also example install, upgrade and un-install options to mapr-install.sh
+that leverage clush to run quickly on an entire set of nodes or
+cluster.  Many scripts will not run without editing, so read the scripts
+carefully to understand how to edit them with site specific info.
 
 /John Benninghoff

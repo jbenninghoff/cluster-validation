@@ -11,12 +11,12 @@
 # all the nodes under test.  Or passwordless sudo for a non-root account.
 
 # Handle script options
-DBG=""; group=all
-while getopts ":dg:" opt; do
+DBG=""; group=all; cluser=""
+while getopts "dl:g:" opt; do
   case $opt in
     d) DBG=true ;;
     g) group=$OPTARG ;;
-    u) cuser=$OPTARG ;;
+    l) cluser="-l $OPTARG" ;;
     \?) echo "Invalid option: -$OPTARG" >&2; usage ;;
   esac
 done
@@ -30,20 +30,18 @@ else
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
    #grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
    #clush specific arguments TBD: -l mapr when run from Mac
-   parg="-b -g ${group:-all}"
+   parg="${cluser} -b -g ${group:-all}"
    parg1="-S"
    parg2="-B"
    parg3="-u 30"
-   parg4="-g ${group:-all}"
    node=$(nodeset -I0 -e @${group:-all})
-   parg5="-w $node -o -qtt"
-   node=mapr@$(nodeset -I0 -e @${group:-all})
+   narg="-w $node -o -qtt"
    # Common arguments to pass in to clush execution
    #clcnt=$(nodeset -c @all)
    #parg="$parg -f $clcnt" #fanout set to cluster node count
    #parg="-o '-oLogLevel=ERROR' $parg"
 fi
-[ -n "$DBG" ] && { clush $parg $parg1 date || { echo clush failed; exit 3; }; }
+[ -n "$DBG" ] && { clush $parg $parg1 -u 9 date || { echo clush failed; exit 3; }; }
 
 # Locate or guess MapR Service Account
 if [ -f /opt/mapr/conf/daemon.conf ]; then
@@ -58,7 +56,7 @@ fi
 # Define Sudo options if available
 if [ $(id -u) -ne 0 ]; then
    SUDO='env PATH=/sbin:/usr/sbin:$PATH'
-   if (clush $parg5 sudo -ln 2>&1 | grep 'sudo: a password is required'); then
+   if (clush $narg sudo -ln 2>&1 | grep 'sudo: a password is required'); then
       :
       #TBD: Support password-sudo using -S -i
       #read -s -e -p 'Enter sudo password: ' mypasswd
@@ -75,7 +73,7 @@ sep=$(printf %80s); sep=${sep// /=} #Substitute all blanks with ======
 #distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
-sysd=$(clush $parg5 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
+sysd=$(clush $narg "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
 
 [ -n "$DBG" ] && { echo sysd: $sysd; echo serviceacct: $serviceacct; echo SUDO: $SUDO; echo parg: $parg; echo node: $node; }
 [ -n "$DBG" ] && exit
@@ -198,11 +196,11 @@ clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwat
 #clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
 clush $parg $parg2 'echo "Java Version: "; java -version || echo See java-post-install.sh'; echo $sep
 echo Hostname IP addresses
-clush $parg4 'hostname -I'; echo $sep
+clush ${parg/-b /} 'hostname -I'; echo $sep
 echo DNS lookup
-clush $parg4 'host $(hostname -f)'; echo $sep
+clush ${parg/-b /} 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup
-clush $parg4 'host $(hostname -i)'; echo $sep
+clush ${parg/-b /} 'host $(hostname -i)'; echo $sep
 echo Check for system wide nproc and nofile limits
 clush $parg "${SUDO:-} grep -e nproc -e nofile /etc/security/limits.d/*nproc.conf /etc/security/limits.conf |grep -v ':#' "; echo $sep
 echo Check for root ownership of /opt/mapr  
