@@ -17,7 +17,7 @@ else
 fi
 
 # -t (THP) option to set THP for peak performance
-while getopts ":t" opt; do
+while getopts "t" opt; do
   case $opt in
     t) thp=setit ;;
     \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
