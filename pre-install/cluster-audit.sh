@@ -6,9 +6,10 @@
 # A sequence of parallel shell commands probing for system configuration
 # and highlighting differences between the nodes in a cluster by using clush.
 #
-# The script requires that the clush utility (a parallel execution shell)
+# The script requires that the clush utility (a parallel ssh tool)
 # be installed and configured using passwordless ssh connectivity for root to
 # all the nodes under test.  Or passwordless sudo for a non-root account.
+# use -l mapr when run from Mac
 
 # Handle script options
 DBG=""; group=all; cluser=""
@@ -29,7 +30,7 @@ if ! type clush >& /dev/null; then
 else
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
    #grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
-   #clush specific arguments TBD: -l mapr when run from Mac
+   #clush specific arguments
    parg="${cluser} -b -g ${group:-all}"
    parg1="-S"
    parg2="-B"
@@ -41,7 +42,7 @@ else
    #parg="$parg -f $clcnt" #fanout set to cluster node count
    #parg="-o '-oLogLevel=ERROR' $parg"
 fi
-[ -n "$DBG" ] && { clush $parg $parg1 -u 9 date || { echo clush failed; exit 3; }; }
+[ -n "$DBG" ] && { clush $parg $parg1 ${parg3/0 /} date || { echo clush failed; exit 3; }; }
 
 # Locate or guess MapR Service Account
 if [ -f /opt/mapr/conf/daemon.conf ]; then
@@ -147,7 +148,7 @@ case $distro in
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
       pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core"
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed"; echo $sep
-      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils lsof lvm2 iftop ntop iotop atop iotop"
+      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils lsof lvm2 iftop ntop iotop atop ftop htop"
       clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
       clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; ${SUDO:-} getenforce" ; echo $sep
       case $sysd in
@@ -186,7 +187,7 @@ case $sysd in
    false)
       clush $parg $parg3 "df -hT | cut -c22-28,39- | grep -e '  *' | grep -v -e /dev"; echo $sep ;;
 esac
-echo Check for nosuid mounts #TBD add noexec check
+echo Check for nosuid and noexec mounts
 clush $parg $parg3 "mount | grep -e noexec -e nosuid | grep -v tmpfs |grep -v 'type cgroup'"; echo $sep
 echo Check for /tmp permission 
 clush $parg "stat -c %a /tmp | grep 1777 || echo /tmp permissions not 1777" ; echo $sep
@@ -209,16 +210,24 @@ echo "Check for $serviceacct login"
 clush $parg $parg1 "echo '$serviceacct account for MapR Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
 echo $sep
 
-if [[ $(id -un) != $serviceacct && $(id -u) -ne 0 || "$SUDO" =~ .*sudo.* ]]; then
+if [[ $(id -u) -eq 0 || "$SUDO" =~ .*sudo.* ]]; then
+   echo Check for $serviceacct user specific open file and process limits
+   clush $parg "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -u'"
+   clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'"; echo $sep
+   echo Check for $serviceacct users java exec permission and version
+   clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
+   echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
+   clush $parg "${SUDO:-} ls ~$serviceacct/.ssh/authorized_keys*"; echo $sep
+elif [[ $(id -un) == $serviceacct ]]; then
+   echo Check for $serviceacct user specific open file and process limits
+   clush $parg "echo -n 'Open process limit(should be >=32K): '; ulimit -u"
+   clush $parg "echo -n 'Open file limit(should be >=32K): '; ulimit -n"; echo $sep
+   echo Check for $serviceacct users java exec permission and version
+   clush $parg $parg2 "echo -n 'Java version: '; java -version"; echo $sep
+   echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
+   clush $parg "ls ~$serviceacct/.ssh/authorized_keys*"; echo $sep
+else
    echo Must have root access or sudo rights to check $serviceacct limits
-   exit
 fi
-echo Check for $serviceacct user specific open file and process limits
-clush $parg "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -u'" ; echo $sep
-clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'" ; echo $sep
-echo Check for $serviceacct users java exec permission and version
-clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
-echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
-clush $parg "${SUDO:-} ls ~$serviceacct/.ssh/authorized_keys*"; echo $sep
 #echo 'Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)'
 #clush $parg "echo 'Root login '; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }"; echo $sep
