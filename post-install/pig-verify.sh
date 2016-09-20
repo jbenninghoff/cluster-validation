@@ -6,7 +6,7 @@ hadoop fs -ls || { echo Pig requires user directory, directory not found; exit 1
 #sudo hadoop fs -mkdir /tmp
 #sudo hadoop fs -chmod 777 /tmp
 
-hadoop fs -copyFromLocal /opt/mapr/pig/pig-0.12/tutorial/data/excite-small.log /tmp
+hadoop fs -copyFromLocal /opt/mapr/pig/pig-0.1?/tutorial/data/excite-small.log /tmp
 
 pig <<-'EOF'
 set mapred.map.child.java.opts '-Xmx1g'

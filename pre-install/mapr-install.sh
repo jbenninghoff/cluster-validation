@@ -41,11 +41,11 @@ clname='jbsec' #Name for the entire cluster, no spaces
 admin1='jbenninghoff' #Non-root, non-mapr linux account which has a known password, needed to login to web ui
 mapruid=mapr; maprgid=mapr #MapR service account and group
 spwidth=4 #Storage Pool width
-[ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #Use sudo, assuming account has password-less sudo  (sudo -i)?
-export JAVA_HOME=/usr/java/default #Oracle JDK
-#export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 maprver=v5.1.0 #TBD: Grep repo file to confirm or alter
+export JAVA_HOME=/usr/java/default #Oracle JDK
+#export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
+[ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #Use sudo, assuming account has password-less sudo  (sudo -i)?
 
 install-patch() { #Find, Download and install mapr-patch v5.1.x
    inrepo=false; clush -S -B -g clstr ${SUDO:-} "yum info mapr-patch" && inrepo=true
@@ -77,7 +77,6 @@ clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" 
 clush -S -B -g clstr 'echo /tmp permissions; stat -c %a /tmp | grep -q 1777' || { echo Permissions not 1777 on /tmp on all nodes; exit 3; }
 clush -S -B -g clstr 'echo Check repo; grep -qi mapr /etc/yum.repos.d/*' || { echo MapR repos not found; exit 3; }
 clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
-
 
 if [ "$upgrade" == "true" ]; then
    #TBD: grep secure=true /opt/mapr/conf/mapr-clusters.conf && { cp ../post-install/mapr-audit.sh /tmp; sudo -u $mapruid /tmp/mapr-audit.sh; }
