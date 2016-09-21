@@ -28,7 +28,7 @@ if ! type clush >& /dev/null; then
    clush() { eval "$@"; } #clush becomes no-op, all commands run locally
    #clush() { for h in $(<~/host.list); do; ssh $h $@; done; } #ssh in for loop :-(
 else
-   [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
+   [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
    #grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
    #clush specific arguments
    parg="${cluser} -b -g ${group:-all}"
@@ -55,7 +55,7 @@ else
 fi
 
 # Define Sudo options if available
-if [ $(id -u) -ne 0 ]; then
+if [[ $(id -u) -ne 0 && "$cluser" != "-l root" ]]; then
    SUDO='env PATH=/sbin:/usr/sbin:$PATH'
    if (clush $narg sudo -ln 2>&1 | grep 'sudo: a password is required'); then
       :
@@ -70,11 +70,12 @@ if [ $(id -u) -ne 0 ]; then
 fi
 
 # Set separator and Linux distro and systemd
-sep=$(printf %80s); sep=${sep// /=} #Substitute all blanks with ======
+#sep=$(printf %80s); sep=${sep// /=} #Substitute all blanks with ======
+sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
 #distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
-sysd=$(clush $narg "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
+sysd=$(clush $narg $parg1 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
 
 [ -n "$DBG" ] && { echo sysd: $sysd; echo serviceacct: $serviceacct; echo SUDO: $SUDO; echo parg: $parg; echo node: $node; }
 [ -n "$DBG" ] && exit
@@ -113,7 +114,7 @@ echo $sep
 #/opt/MegaRAID/storcli/storcli64 /c0 /eall /sall show | awk '$3 == "UGood"{print $1}'; exit 
 #./MegaCli64 -cfgeachdskraid0 WT RA cached NoCachedBadBBU –strpsz256 -a0
 clush $parg "echo 'Storage Controller: '; ${SUDO:-} lspci | grep -i -e ide -e raid -e storage -e lsi"; echo $sep
-clush $parg "echo 'SCSI RAID devices in dmesg: '; dmesg | grep -i raid | grep -i -o 'scsi.*$'"; echo $sep
+clush $parg "echo 'SCSI RAID devices in dmesg: '; dmesg | grep -i raid | grep -i -o 'scsi.*$' |uniq"; echo $sep
 case $distro in
    ubuntu)
    clush $parg "${SUDO:-} fdisk -l | grep '^Disk /.*:'"; echo $sep
@@ -145,6 +146,7 @@ case $distro in
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
    redhat|centos|red*)
+      clush $parg 'echo "MapR repos check "; grep -li mapr /etc/yum.repos.d/* | xargs -l grep -Hi baseurl' ; echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
       pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core"
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed"; echo $sep
