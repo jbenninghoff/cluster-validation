@@ -140,13 +140,14 @@ case $distro in
       # Ubuntu SElinux tools not so good.
       clush $parg "echo 'NTP status '; ${SUDO:-} service ntpd status"; echo $sep
       clush $parg "${SUDO:-} apparmor_status | sed 's/([0-9]*)//'"; echo $sep
-      clush $parg "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo $sep
+      clush $parg "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"
+      echo $sep
       clush $parg "echo 'Firewall status: '; ${SUDO:-} service ufw status | head -10"; echo $sep
       clush $parg "echo 'IPtables status: '; ${SUDO:-} iptables -L | head -10"; echo $sep
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
    redhat|centos|red*)
-      clush $parg 'echo "MapR repos check "; grep -li mapr /etc/yum.repos.d/* | xargs -l grep -Hi baseurl' ; echo $sep
+      clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark';echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
       pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core"
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed"; echo $sep
@@ -180,8 +181,8 @@ clush $parg "echo 'Sysctl Values: '; ${SUDO:-} sysctl vm.swappiness net.ipv4.tcp
 echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 1\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"; echo $sep
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
 clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
-clush $parg 'echo "Disk Controller Max Transfer Size:"; files=$(ls /sys/block/{sd,xvd,vd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
-clush $parg 'echo "Disk Controller Configured Transfer Size:"; files=$(ls /sys/block/{sd,xvd,vd}*/queue/max_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done'; echo $sep
+clush $parg 'echo "Disk Controller Max Transfer Size:"; files=$(ls /sys/block/{sd,xvd,vd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done |uniq -c -f1'; echo $sep
+clush $parg 'echo "Disk Controller Configured Transfer Size:"; files=$(ls /sys/block/{sd,xvd,vd}*/queue/max_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done |uniq -c -f1'; echo $sep
 echo Check Mounted FS
 case $sysd in
    true)

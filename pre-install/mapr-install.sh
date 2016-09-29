@@ -37,12 +37,12 @@ while getopts "smuxae" opt; do
 done
 
 # Site specific variables
-clname='jbsec' #Name for the entire cluster, no spaces
-admin1='jbenninghoff' #Non-root, non-mapr linux account which has a known password, needed to login to web ui
+clname='' #Name for the entire cluster, no spaces
+admin1='' #Non-root, non-mapr linux account which has a known password, needed to login to web ui
 mapruid=mapr; maprgid=mapr #MapR service account and group
 spwidth=4 #Storage Pool width
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
-maprver=v5.1.0 #TBD: Grep repo file to confirm or alter
+maprver=v5.2.0 #TBD: Grep repo file to confirm or alter
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 [ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #Use sudo, assuming account has password-less sudo  (sudo -i)?
@@ -63,13 +63,14 @@ install-patch() { #Find, Download and install mapr-patch v5.1.x
 
 # Check cluster for pre-requisites
 #clush -S -B -g clstr 'test -f /opt/mapr/conf/disktab' && { echo MapR appears to be installed; exit 3; }
-grep ^clstr /etc/clustershell/groups || { echo clustershell group: clstr undefined; exit 1; }
-grep ^cldb /etc/clustershell/groups || { echo clustershell group: cldb undefined; exit 1; }
+[ $(nodeset -c @clstr) -gt 0 ] || { echo clustershell group: clstr undefined; exit 1; }
+[ $(nodeset -c @cldb) -gt 0 ] || { echo clustershell group: cldb undefined; exit 1; }
 cldb1=$(nodeset -I0 -e @cldb) #first node in cldb group
-grep ^zk: /etc/clustershell/groups || { echo clustershell group: zk undefined; exit 1; }
-grep ^rm /etc/clustershell/groups || { echo clustershell group: rm undefined; exit 1; }
-grep ^hist /etc/clustershell/groups || { echo clustershell group: hist undefined; exit 1; }
+[ $(nodeset -c @zk) -gt 0 ] || { echo clustershell group: zk undefined; exit 1; }
+[ $(nodeset -c @rm) -gt 0 ] || { echo clustershell group: rm undefined; exit 1; }
+[ $(nodeset -c @hist) -gt 0 ] || { echo clustershell group: hist undefined; exit 1; }
 [[ -z "${clname// /}" ]] && { echo Cluster name not set.  Set clname in this script; exit 2; }
+[[ -z "${admin1// /}" ]] && { echo Admin name not set.  Set admin1 in this script; exit 2; }
 [[ -z "${cldb1// /}" ]] && { echo Primary node name not set.  Set or check cldb1 in this script; exit 2; }
 clush -S -B -g clstr id $admin1 || { echo $admin1 account does not exist on all nodes; exit 3; }
 clush -S -B -g clstr id $mapruid || { echo mapr account does not exist on all nodes; exit 3; }
@@ -77,6 +78,7 @@ clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" 
 clush -S -B -g clstr 'echo /tmp permissions; stat -c %a /tmp | grep -q 1777' || { echo Permissions not 1777 on /tmp on all nodes; exit 3; }
 clush -S -B -g clstr 'echo Check repo; grep -qi mapr /etc/yum.repos.d/*' || { echo MapR repos not found; exit 3; }
 clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
+read -p "All checks passed, press enter to continue or ctrl-c to abort"
 
 if [ "$upgrade" == "true" ]; then
    #TBD: grep secure=true /opt/mapr/conf/mapr-clusters.conf && { cp ../post-install/mapr-audit.sh /tmp; sudo -u $mapruid /tmp/mapr-audit.sh; }
@@ -169,7 +171,7 @@ if [ "$uninstall" == "true" -a "$edge" == "false" ]; then
 fi
 
 if [ "$edge" == "true" ]; then
-   grep ^edge /etc/clustershell/groups || { echo clustershell group: edge undefined; exit 1; }
+   [ $(nodeset -c @edge) -gt 0 ] || { echo clustershell group: edge undefined; exit 1; }
    if [ "$uninstall" == "true" ]; then
       clush $clargs -g edge -b ${SUDO:-} umount /mapr
       clush $clargs -g edge -b ${SUDO:-} service mapr-warden stop
@@ -189,10 +191,10 @@ if [ "$edge" == "true" ]; then
       if [ "$secure" == "true" ]; then
          scp "$cldb1:/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
          clush -g edge -c ssl_truststore --dest /opt/mapr/conf/
-         clush -g edge -c ssl_keystore --dest /opt/mapr/conf/
+         #clush -g edge -c ssl_keystore --dest /opt/mapr/conf/ #TBD: does Hue need ssl_keystore?
          clush -g edge -c maprserverticket --dest /opt/mapr/conf/
-         clush $clargs -g edge "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}"
-         clush $clargs -g edge "${SUDO:-} chmod 600 /opt/mapr/conf/{ssl_keystore,maprserverticket}"
+         clush $clargs -g edge "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/{ssl_truststore,mapruserticket,maprserverticket}"
+         clush $clargs -g edge "${SUDO:-} chmod 600 /opt/mapr/conf/{maprserverticket,mapruserticket}"
          clush $clargs -g edge "${SUDO:-} chmod 644 /opt/mapr/conf/ssl_truststore"
       fi
       clush -S $clargs -g edge "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid ${sopt:-} $clnt" # v4.1+ use RM zeroconf, no -RM option 
@@ -285,7 +287,8 @@ echo Waiting 2 minutes for system to initialize; end=$((SECONDS+120))
 sp='/-\|'; printf ' '; while [ $SECONDS -lt $end ]; do printf '\b%.1s' "$sp"; sp=${sp#?}${sp%???}; sleep .3; done # Spinner from StackOverflow
 
 echo 'maprlogin required on secure cluster to add cluster user'
-ssh -qtt $cldb1 "${SUDO:-} maprcli node cldbmaster" && ssh $cldb1 "${SUDO:-} maprcli acl edit -type cluster -user $admin1:fc,a"
+ssh -qtt $cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node cldbmaster'" && ssh -qtt $cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli acl edit -type cluster -user $admin1:fc,a'"
+#ssh -qtt $cldb1 "${SUDO:-} maprcli node cldbmaster" && ssh $cldb1 "${SUDO:-} maprcli acl edit -type cluster -user $admin1:fc,a"
 [ $? -ne 0 ] && { echo CLDB did not startup, check status and logs on $cldb1; exit 3; }
 
 echo With a web browser, connect to one of the webservers to continue with license installation:
