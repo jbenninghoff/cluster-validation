@@ -111,6 +111,7 @@ cat $0 >> $logname # append actual script run to the log
 head -22 $logname  # show the top of the log with elapsed time, etc
 echo View $logname for full job stats
 cat terasort.tmp >> $logname; rm terasort.tmp
+./mapr-audit.sh >> $logname
 
 # To validate TeraSort output, uncomment below and change output folder
 # hadoop jar /opt/mapr/hadoop/hadoop-0.20.2/hadoop-0.20.2-dev-examples.jar teravalidate /benchmarks/tera/out /benchmarks/tera/validate

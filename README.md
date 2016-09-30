@@ -147,11 +147,10 @@ tests are RWSpeedTest and TeraSort.  Scripts to run each are
 provided in the folder.  Read the scripts for additional info.  
 
 A script to create a benchmarks volume `mkBMvol.sh` is provided.
-Additionally, `runTeraGen.sh` script is provided to to generate the terabyte
-of data necessary for the TeraSort benchmark.  Be sure to create the 
-benchmarks volume before running any of the post install benchmarks.
+Be sure to create the benchmarks volume before running any of the
+post install benchmarks.
 
-    NOTE: The TeraSort benchmark (executed by runTeraSort.sh) will likely
+    NOTE: The TeraSort benchmark (executed by runTeraGenSort.sh) will likely
     require tuning for each specific cluster.  At a minimum, pass integer
     arguments in powers of 2 (e.g. 4, 8, etc) to the script to increase the
     number of reduce tasks per node up to the maximum reduce slots available on
