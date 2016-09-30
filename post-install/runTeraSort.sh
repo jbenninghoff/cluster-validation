@@ -1,6 +1,8 @@
 #!/bin/bash
 # jbenninghoff 2013-Mar-8 vi: set ai et sw=3 tabstop=3:
 
+echo "This script deprecated, use new combined TeraGen and TeraSort script, runTeraGenSort.sh"; exit
+
 #MRV=$(maprcli cluster mapreduce get |tail -1 |awk '{print $1}')
 logname=terasort-$(date -Imin|cut -c-16).log
 MRV=$(hadoop version | awk 'NR==1{printf("%1.1s\n",$2)}')
