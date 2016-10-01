@@ -45,12 +45,13 @@ distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e 
 maprver=v5.2.0 #TBD: Grep repo file to confirm or alter
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
-[ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #Use sudo, assuming account has password-less sudo  (sudo -i)?
+#[ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #TBD: Use sudo, assuming account has password-less sudo  (sudo -i)?
+[ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
 
 install-patch() { #Find, Download and install mapr-patch v5.1.x
    inrepo=false; clush -S -B -g clstr ${SUDO:-} "yum info mapr-patch" && inrepo=true
    if [ "$inrepo" == "true" ]; then
-      clush -v -g clstr ${SUDO:-} "yum -y install $patchrpm"
+      clush -v -g clstr ${SUDO:-} "yum -y install mapr-patch"
    else
       patchrpm=$(curl -s http://package.mapr.com/patches/releases/$maprver/redhat/ | grep -o -P -m1 mapr-patch-5.1.*?.rpm | sed -n 1p)
       if [ $? -ne 0 ]; then
@@ -87,7 +88,7 @@ if [ "$upgrade" == "true" ]; then
    #cluster_checks1 || { echo Could not load cluster checks function; exit 4; }
    clush -g clstr -b ${SUDO:-} umount /mapr #unmounts all localhost loopback NFS mounts
    clush -g clstr -b ${SUDO:-} nfsstat -m #TBD: stop if other than loopback mounts found
-   read -p "Press enter to continue or ctrl-c to abort" #TBD: exit if any mounts exist
+   read -p "Press enter to continue or ctrl-c to abort, abort if any mounts exist"
 
    #Check repo version
    clush -B -g clstr ${SUDO:-} "yum clean all"
@@ -126,7 +127,7 @@ if [ "$upgrade" == "true" ]; then
 
    #Run configure.sh -R to insure configuration is updated
    clush -g clstr -b ${SUDO:-} /opt/mapr/server/configure.sh -R
-   #TBD: modify yarn-site.xml and mapred-site.xml and container-executor.cfg
+   #TBD: modify yarn-site.xml and mapred-site.xml and container-executor.cfg when upgrading
 
    #Start rpcbind, zk and warden
    clush -g clstr -b ${SUDO:-} service rpcbind restart
@@ -191,19 +192,21 @@ if [ "$edge" == "true" ]; then
       if [ "$secure" == "true" ]; then
          scp "$cldb1:/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
          clush -g edge -c ssl_truststore --dest /opt/mapr/conf/
-         #clush -g edge -c ssl_keystore --dest /opt/mapr/conf/ #TBD: does Hue need ssl_keystore?
+         clush -g edge -c ssl_keystore --dest /opt/mapr/conf/
          clush -g edge -c maprserverticket --dest /opt/mapr/conf/
-         clush $clargs -g edge "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/{ssl_truststore,mapruserticket,maprserverticket}"
+         clush $clargs -g edge "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/{ssl_truststore,ssl_keystore,mapruserticket,maprserverticket}"
          clush $clargs -g edge "${SUDO:-} chmod 600 /opt/mapr/conf/{maprserverticket,mapruserticket}"
          clush $clargs -g edge "${SUDO:-} chmod 644 /opt/mapr/conf/ssl_truststore"
       fi
       clush -S $clargs -g edge "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid ${sopt:-} $clnt" # v4.1+ use RM zeroconf, no -RM option 
       chmod u+s /opt/mapr/bin/fusermount
       echo Edit /opt/mapr/conf/fuse.conf. Append mapr ticket file path 
+      service mapr-warden restart
       exit
    fi
 fi
 
+clear
 clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
 # Heterogeneous Storage Pools
 #clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous Storage Pools [$spwidth]
@@ -211,7 +214,6 @@ clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp
 #clush $clargs -B -g clstr "cat /tmp/disk.list1; wc /tmp/disk.list1" || { echo /tmp/disk.list1 not found; exit 4; }
 #clush $clargs -B -g clstr "cat /tmp/disk.list2; wc /tmp/disk.list2" || { echo /tmp/disk.list2 not found; exit 4; }
 
-clear
 cat - <<EOF
 Assuming that all nodes have been audited with cluster-audit.sh and all issues fixed
 Assuming that all nodes have met subsystem performance expectations as measured by memory-test.sh, network-test.sh and disk-test.sh
@@ -232,7 +234,7 @@ install-patch
 # admin services layered over data nodes defined in rm and cldb groups
 if [ "$mfs" == "false" ]; then
    clush $clargs -g rm "${SUDO:-} yum -y install mapr-resourcemanager" # at least 2 rm nodes
-   clush $clargs -g hist "${SUDO:-} yum -y install mapr-historyserver mapr-webserver" #yarn history server
+   clush $clargs -g hist "${SUDO:-} yum -y install mapr-historyserver" #yarn history server
    clush $clargs -v -g clstr "${SUDO:-} yum -y install mapr-nodemanager"
 fi
 
@@ -268,11 +270,10 @@ fi
 if [ "$mfs" == "true" ]; then
    clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -u $mapruid -g $maprgid -no-autostart"
 elif [ "$secure" == "true" ]; then
-   #clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart -S"
    clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart -S"
 else
-   #clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart" #TBD: v4.1+ use RM zeroconf
-   clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart" # v4.1+ use RM zeroconf, no -RM option 
+   clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart"
+   #clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -RM $(nodeset -S, -e @rm) -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart" #v4.1+ use RM zeroconf, no -RM
 fi
 [ $? -ne 0 ] && { echo configure.sh failed, check screen and /opt/mapr/logs for errors; exit 2; }
 
@@ -288,7 +289,6 @@ sp='/-\|'; printf ' '; while [ $SECONDS -lt $end ]; do printf '\b%.1s' "$sp"; sp
 
 echo 'maprlogin required on secure cluster to add cluster user'
 ssh -qtt $cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node cldbmaster'" && ssh -qtt $cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli acl edit -type cluster -user $admin1:fc,a'"
-#ssh -qtt $cldb1 "${SUDO:-} maprcli node cldbmaster" && ssh $cldb1 "${SUDO:-} maprcli acl edit -type cluster -user $admin1:fc,a"
 [ $? -ne 0 ] && { echo CLDB did not startup, check status and logs on $cldb1; exit 3; }
 
 echo With a web browser, connect to one of the webservers to continue with license installation:
