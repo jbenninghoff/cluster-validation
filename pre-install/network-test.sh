@@ -68,8 +68,8 @@ fi
 len=${#iplist[@]}; ((len=len/2))
 half1=( ${iplist[@]:0:$len} ) #extract first half of array (servers)
 half2=( ${iplist[@]:$len} ) #extract second half of array (clients)
-echo half1: ${half1[@]}
-echo half2: ${half2[@]}
+#echo half1: ${half1[@]}
+#echo half2: ${half2[@]}
 # Tar up old log files
 for host in ${half2[@]}; do
    ssh $host 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); [ -n "$files" ] && { tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }'
@@ -126,6 +126,7 @@ for node in "${half2[@]}"; do
             ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log" &
          else
             ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log" & #increase -n value 10x for better test
+            [ $xtra == true ] && ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-2-rpctest.log" &
          fi
        fi
        clients="$clients $!" #catch all client PIDs ($!)
@@ -138,7 +139,7 @@ for node in "${half2[@]}"; do
          if [ $multinic == "true" ]; then
             ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log"
          else
-            [ $xtra == true ] && ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log" &
+            [ $xtra == true ] && ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-2-rpctest.log" &
             ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log"
          fi
        fi

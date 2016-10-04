@@ -21,9 +21,9 @@ while getopts ":dvtsea:g:" opt; do
    esac
 done
 
-sep='====================================================================='
+sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
 type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }
-grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
+[ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
 parg="-b -g ${group:-all}" 
 if [ ! -d /opt/mapr ]; then
    echo MapR not installed locally!
@@ -57,6 +57,7 @@ maprcli_check() {
       node="ssh -qtt $node " #Single node to run maprcli commands from
       #chgu="su -u $srvid -c " # Run as service account
    fi
+   #node="sudo -u mapr  MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket " #Sudo to mapr on secure cluster
 }
 
 cluster_checks1() {

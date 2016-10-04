@@ -32,6 +32,8 @@ Compare results with:
 
 Complete documentation for clush and clustershell can be found here:
 http://clustershell.readthedocs.org/en/latest/tools/clush.html
+If you don't find clustershell in EPEL, you may be able to download rpm here:
+http://mirror.math.princeton.edu/pub/epel/6/x86_64/clustershell-1.7.2-1.el6.noarch.rpm
 
 Next, download and extract the cluster-validation package with a command like this:
 
