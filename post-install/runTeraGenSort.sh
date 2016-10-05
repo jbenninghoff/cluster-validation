@@ -52,8 +52,8 @@ case $chunksize in
       -Dmapreduce.map.cpu.vcores=0 \
       -Dmapreduce.map.output.compress=false \
       -Dmapreduce.map.sort.spill.percent=0.99 \
-      -Dmapreduce.map.memory.mb=3000 \
-      -Dmapreduce.map.java.opts="-Xmx2500m -Xms2500m" \
+      -Dmapreduce.map.memory.mb=2000 \
+      -Dmapreduce.map.java.opts="-Xmx1900m -Xms1900m" \
       -Dmapreduce.task.io.sort.mb=1500 \
       -Dmapreduce.task.io.sort.factor=100 \
       -Dmapreduce.reduce.disk=0 \

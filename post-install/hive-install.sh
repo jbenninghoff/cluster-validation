@@ -59,6 +59,10 @@ create user '$USER'@'$HS2_NODE' IDENTIFIED BY '$PASSWORD';
 grant all privileges on $DATABASE.* to '$USER'@'$HS2_NODE' with grant option;
 flush privileges;
 EOF
+#TBD: check for errors
+
+#echo -e "[client]\nuser=root\npassword=$ROOT_PASSWORD" > ~/.my.cnf; chmod 600 ~/.my.cnf
+#mysql -e "select user,host,password from mysql.user; show grants for 'hive';"
 
 # The driver for the MySQL JDBC connector (a jar file) is part of the MapR distribution under /opt/mapr/lib/.
 # Link this jar file into the Hive lib directory.
