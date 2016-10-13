@@ -42,7 +42,7 @@ while getopts "asdrz:-:" opt; do
         a) disks=all ;;
         s) seq=true ;;
         r) disks=readtest ;;
-        z) if [[ "$OPTARG" =~ ^[0-9]+$ ]]; then size=$OPTARG; else { echo $OPTARG is not an integer; exit; }; fi  ;;
+        z) [[ "$OPTARG" =~ ^[0-9]+$ ]] && size=$OPTARG || { echo $OPTARG is not an integer; exit; } ;;
         d) DBG=true ;; # Enable debug statements
         *) echo "Invalid option -$OPTARG" >&2; usage ;;
     esac
@@ -52,8 +52,7 @@ done
 find_unused_disks() {
    [ -n "$DBG" ] && set -x
    disklist=""
-   #fdisks=`fdisk -l 2>/dev/null |grep "^Disk .* bytes$"|awk '{print $2}'|sort`
-   fdisks=$(fdisk -l | awk '/^Disk .* bytes/{print $2}')
+   fdisks=$(fdisk -l | awk '/^Disk .* bytes/{print $2}' |sort)
    for d in $fdisks; do
       dev=${d%:} #strip colon off the dev path string
       [ -n "$DBG" ] && echo Checking Device: $dev

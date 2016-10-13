@@ -19,7 +19,8 @@ to hand over to your production team.
 Install clustershell (rpm available via EPEL) on a machine with
 password-less ssh to all other cluster nodes.  If using a non-root
 account, then non-root account must have password-less sudo rights
-configured in /etc/sudoers.  Update the file `/etc/clustershell/groups`
+configured in /etc/sudoers.  Update the file
+`/etc/clustershell/groups.d/local.cfg` or `/etc/clustershell/groups`
 to include an entry for "all" matching a pattern or patterns of
 host names in your cluster.
 For example;
@@ -34,7 +35,7 @@ Complete documentation for clush and clustershell can be found here:
 http://clustershell.readthedocs.org/en/latest/tools/clush.html
 
 If you don't find clustershell in EPEL, you may be able to download rpm here:
-http://mirror.math.princeton.edu/pub/epel/6/x86_64/clustershell-1.7.2-1.el6.noarch.rpm
+`http://mirror.math.princeton.edu/pub/epel/6/x86_64/clustershell-1.7.2-1.el6.noarch.rpm`
 
 Next, download and extract the cluster-validation package with a command like this:
 
