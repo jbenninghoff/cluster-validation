@@ -1,7 +1,7 @@
 #!/bin/bash
 # jbenninghoff 2013-Jun-07  vi: set ai et sw=3 tabstop=3:
 
-cat << EOF
+>&2 cat << EOF
 MapR rpc test to validate network bandwidth using cluster bisection strategy
 One half of the nodes act as clients by sending load to other half of the nodes acting as servers.
 The throughput between each pair of nodes is reported.
@@ -38,6 +38,7 @@ iperfbin=$scriptdir/iperf #Packaged version
 rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
 rpctestbin=$scriptdir/rpctest #Packaged version
 tmpfile=$(mktemp); trap 'rm $tmpfile' 0 1 2 3 15
+#ssh() { /usr/bin/ssh -l root $@; }
 
 # Generate a host list array
 if type nodeset >& /dev/null; then
@@ -84,10 +85,11 @@ if [ -n $sortopt ]; then
    echo Sorted half2: ${half2[@]}
 fi
 
-# Handle uneven host count for $half2 array, save and strip last element
-len=${#half2[@]}
+# Handle uneven total host count, save and strip last element
+len=${#iplist[@]} #list of 3 hosts is special case and the reason why length of half2 can't be used
 if [ $(($len & 1)) -eq 1 ]; then 
    echo Uneven IP address count, removing extra client IP
+   len=${#half2[@]} #recalc length of client array, to be used to modify client array
    (( len-- ))
    extraip=${half2[$len]}; echo extraip: $extraip
    #(( len-- )); echo len: $len
@@ -118,6 +120,7 @@ sleep 5 # let the servers stabilize
 
 i=0 # index into array
 for node in "${half2[@]}"; do
+   [ -n "$DBG" ] && echo node: $node, half1-i: ${half1[$i]}
   case $concurrent in #TBD: convert case block to if/else block
      true)
        if [ $runiperf == "true" ]; then
