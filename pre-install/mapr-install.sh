@@ -43,17 +43,19 @@ mapruid=mapr; maprgid=mapr #MapR service account and group
 spwidth=4 #Storage Pool width
 distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 maprver=v5.2.0 #TBD: Grep repo file to confirm or alter
+clargs='-S'
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 #[ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #TBD: Use sudo, assuming account has password-less sudo  (sudo -i)?
 [ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
+#clush() { /Users/jbenninghoff/bin/clush -l root $@; } #To use this script from edge node as non-root, e.g. Mac
 
 install-patch() { #Find, Download and install mapr-patch v5.1.x
    inrepo=false; clush -S -B -g clstr ${SUDO:-} "yum info mapr-patch" && inrepo=true
    if [ "$inrepo" == "true" ]; then
       clush -v -g clstr ${SUDO:-} "yum -y install mapr-patch"
    else
-      patchrpm=$(curl -s http://package.mapr.com/patches/releases/$maprver/redhat/ | grep -o -P -m1 mapr-patch-5.1.*?.rpm | sed -n 1p)
+      patchrpm=$(curl -s http://package.mapr.com/patches/releases/$maprver/redhat/ | sed -n "s/.*\(mapr-patch-${maprver//v}.*.rpm\).*/\1/p")
       if [ $? -ne 0 ]; then
          echo "Patch not found, patchrpm=$patchrpm"
       else
@@ -79,6 +81,7 @@ clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" 
 clush -S -B -g clstr 'echo /tmp permissions; stat -c %a /tmp | grep -q 1777' || { echo Permissions not 1777 on /tmp on all nodes; exit 3; }
 clush -S -B -g clstr 'echo Check repo; grep -qi mapr /etc/yum.repos.d/*' || { echo MapR repos not found; exit 3; }
 clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
+#TBD check for gpgcheck and key(s)
 read -p "All checks passed, press enter to continue or ctrl-c to abort"
 
 if [ "$upgrade" == "true" ]; then
@@ -143,7 +146,7 @@ if [ "$upgrade" == "true" ]; then
 fi
 
 if [ "$uninstall" == "true" -a "$edge" == "false" ]; then
-   maprcli dashboard info -json |awk '/"disk_space":{/,/}/'
+   ssh -qtt root@$cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli dashboard info -json' |awk '/"disk_space":{/,/}/'"
    read -p "All data will be lost, press enter to continue or ctrl-c to abort"
    clush $clargs -g clstr -b ${SUDO:-} umount /mapr
    clush $clargs -g clstr -b ${SUDO:-} service mapr-warden stop
@@ -190,7 +193,7 @@ if [ "$edge" == "true" ]; then
       #clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-client mapr-nfs" #Enables edge node as simple client with loopback NFS to maprfs
       #If mapr-core installed, install-patch?
       if [ "$secure" == "true" ]; then
-         scp "$cldb1:/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
+         scp "root@$cldb1:/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
          clush -g edge -c ssl_truststore --dest /opt/mapr/conf/
          clush -g edge -c ssl_keystore --dest /opt/mapr/conf/
          clush -g edge -c maprserverticket --dest /opt/mapr/conf/
@@ -208,7 +211,8 @@ fi
 
 clear
 clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
-# Heterogeneous Storage Pools
+clush $clargs -B -g clstr 'test -f /opt/mapr/conf/disktab' && { echo MapR appears to be installed; exit 3; }
+# Multiple disk lists for heterogeneous Storage Pools
 #clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous Storage Pools [$spwidth]
 #clush $clargs -B -g clstr "sed -n '11,\$p' /tmp/disk.list > /tmp/disk.list2"
 #clush $clargs -B -g clstr "cat /tmp/disk.list1; wc /tmp/disk.list1" || { echo /tmp/disk.list1 not found; exit 4; }
@@ -252,8 +256,8 @@ if [ "$secure" == "true" ]; then
    # Configure primary CLDB node with security keys
    clush -S $clargs -w $cldb1 "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -S -genkeys -u $mapruid -g $maprgid -no-autostart"
    [ $? -ne 0 ] && { echo configure.sh failed, check screen and $cldb1:/opt/mapr/logs for errors; exit 2; }
-   read -p "Press enter to continue or ctrl-c to abort"
-   scp "$cldb1:/opt/mapr/conf/{cldb.key,ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
+   #read -p "Press enter to continue or ctrl-c to abort"
+   scp "root@$cldb1:/opt/mapr/conf/{cldb.key,ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
    #echo Needs testing
    clush -g cldb -x $cldb1 -c cldb.key --dest /opt/mapr/conf/
    clush $clargs -g cldb -x $cldb1 "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/cldb.key"
@@ -288,7 +292,7 @@ echo Waiting 2 minutes for system to initialize; end=$((SECONDS+120))
 sp='/-\|'; printf ' '; while [ $SECONDS -lt $end ]; do printf '\b%.1s' "$sp"; sp=${sp#?}${sp%???}; sleep .3; done # Spinner from StackOverflow
 
 echo 'maprlogin required on secure cluster to add cluster user'
-ssh -qtt $cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node cldbmaster'" && ssh -qtt $cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli acl edit -type cluster -user $admin1:fc,a'"
+ssh -qtt root@$cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node cldbmaster'" && ssh -qtt root@$cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli acl edit -type cluster -user $admin1:fc,a'"
 [ $? -ne 0 ] && { echo CLDB did not startup, check status and logs on $cldb1; exit 3; }
 
 echo With a web browser, connect to one of the webservers to continue with license installation:
