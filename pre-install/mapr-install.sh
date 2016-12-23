@@ -41,7 +41,7 @@ clname='' #Name for the entire cluster, no spaces
 admin1='' #Non-root, non-mapr linux account which has a known password, needed to login to web ui
 mapruid=mapr; maprgid=mapr #MapR service account and group
 spwidth=4 #Storage Pool width
-distro=$(cat /etc/*release | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
+distro=$(cat /etc/*release 2>/dev/null | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 maprver=v5.2.0 #TBD: Grep repo file to confirm or alter
 clargs='-S'
 export JAVA_HOME=/usr/java/default #Oracle JDK
@@ -291,9 +291,9 @@ clush $clargs -g clstr "${SUDO:-} service mapr-warden start"
 echo Waiting 2 minutes for system to initialize; end=$((SECONDS+120))
 sp='/-\|'; printf ' '; while [ $SECONDS -lt $end ]; do printf '\b%.1s' "$sp"; sp=${sp#?}${sp%???}; sleep .3; done # Spinner from StackOverflow
 
-echo 'maprlogin required on secure cluster to add cluster user'
-ssh -qtt root@$cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node cldbmaster'" && ssh -qtt root@$cldb1 "su - mapr -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli acl edit -type cluster -user $admin1:fc,a'"
+ssh -qtt root@$cldb1 "su - $mapruid -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node cldbmaster'" 
 [ $? -ne 0 ] && { echo CLDB did not startup, check status and logs on $cldb1; exit 3; }
+ssh -qtt root@$cldb1 "su - $mapruid -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli acl edit -type cluster -user $admin1:fc,a'"
 
 echo With a web browser, connect to one of the webservers to continue with license installation:
 echo Webserver nodes: $(nodeset -S, -e @cldb)

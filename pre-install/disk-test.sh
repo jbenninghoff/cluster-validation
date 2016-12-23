@@ -42,12 +42,12 @@ while getopts "asdrz:-:" opt; do
         a) disks=all ;;
         s) seq=true ;;
         r) disks=readtest ;;
-        z) [[ "$OPTARG" =~ ^[0-9]+$ ]] && size=$OPTARG || { echo $OPTARG is not an integer; exit; } ;;
+        z) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && size=$OPTARG || { echo $OPTARG is not an number; exit; } ;;
         d) DBG=true ;; # Enable debug statements
         *) echo "Invalid option -$OPTARG" >&2; usage ;;
     esac
 done
-#[ -n "$DBG" ] && exit
+[ -n "$DBG" ] && read -p "Press enter to continue or ctrl-c to abort"
 
 find_unused_disks() {
    [ -n "$DBG" ] && set -x
