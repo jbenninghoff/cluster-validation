@@ -95,10 +95,17 @@ cluster_checks2() {
    clush $parg "echo 'Cat mapr-clusters.conf, Checking for MapR Mirror enabling'; cat /opt/mapr/conf/mapr-clusters.conf"; echo $sep
    #TBD: if mapr-clusters.conf has more than one line, look for mirror volumes {maprcli volume list -json |grep mirror???}
    clush $parg "echo 'MapR Env Settings'; grep ^export /opt/mapr/conf/env.sh"; echo $sep
-   clush $parg "echo 'Mapred-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-0.20.2/conf/mapred-site.xml"; echo $sep
-   #TBD: checksum core-site.xml?
+   if [ "$mrv" == "1" ] ; then # MRv1
+      clush $parg "echo 'Mapred-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-0.20.2/conf/mapred-site.xml"; echo $sep
+      clush $parg "echo 'core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-0.20.2/conf/core-site.xml"; echo $sep
+      clush $parg "echo 'MapR Central Logging Setting'; grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh"; echo $sep
+   else
+      clush $parg "echo 'MR2 core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.7.0/etc/hadoop/core-site.xml"; echo $sep
+      clush $parg "echo 'MR2 mapred-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.7.0/etc/hadoop/mapred-site.xml"; echo $sep
+      clush $parg "echo 'MR2 yarn-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.7.0/etc/hadoop/yarn-site.xml"; echo $sep
+      hadoop conf-details print-all-effective-properties |grep central-logging
+   fi
    clush $parg "echo 'MapR Central Configuration Setting'; grep centralconfig /opt/mapr/conf/warden.conf"; echo $sep
-   clush $parg "echo 'MapR Central Logging Setting'; grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh"; echo $sep
    clush $parg "echo 'MapR Roles Per Host'; ls /opt/mapr/roles"; echo $sep
    #clush $parg "echo 'MapR Directories'; find /opt/mapr -maxdepth 1 -type d |sort"; echo $sep
    echo
