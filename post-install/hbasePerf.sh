@@ -1,10 +1,11 @@
 #!/bin/bash
 # jbenninghoff 2013-Sep-13  vi: set ai et sw=3 tabstop=3:
 
-# HBase tests below assume /tables volume exists and mapping in core-site.xml is configured
+# MapR DB tests below assume /tables volume exists and mapping in core-site.xml is configured
 #maprcli volume create -name tables -path /tables -topology /data/default-rack -replication 3 -replicationtype low_latency 
 #hadoop mfs -setcompression off /tables
 #echo '<property> <name>hbase.table.namespace.mappings</name> <value>*:/tables</value> </property>' >> /opt/mapr/hadoop.../conf/core-site.xml
+# Apache HBase will be used if core-site.xml mappings do not exist (e.g. TestTable)
 
 
 # HBase bundled performance tool, multithreaded
