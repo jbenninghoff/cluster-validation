@@ -167,7 +167,7 @@ case $distro in
             clush $parg "echo 'NTP status '; ${SUDO:-} service ntpd status |sed 's/(.*)//'"; echo $sep
             clush $parg "${SUDO:-} chkconfig --list iptables" ; echo $sep
             clush $parg "${SUDO:-} service iptables status | head -10"; echo $sep
-            clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} service cpuspeed status" 
+            clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} service cpuspeed status"; echo $sep
             #clush $parg "/sbin/service iptables status | grep -m 3 -e ^Table -e ^Chain" 
             #clush $parg "echo -n 'Frequency Governor: '; for dev in /sys/devices/system/cpu/cpu[0-9]*; do cat \$dev/cpufreq/scaling_governor; done | uniq -c" 
             #clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
@@ -198,6 +198,7 @@ echo Check for /tmp permission
 clush $parg "stat -c %a /tmp | grep 1777 || echo /tmp permissions not 1777" ; echo $sep
 echo Check for tmpwatch on NM local dir
 clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"; echo $sep
+#FIX: clush -l root -ab "echo '/usr/sbin/tmpwatch \"\$flags\" -x /tmp/hadoop-mapr/nm-local-dir' >> /etc/cron.daily/tmpwatch" 
 #grep tmpwatch -R /etc/cron*/*
 #clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
 clush $parg $parg2 'echo "Java Version: "; java -version || echo See java-post-install.sh'; echo $sep

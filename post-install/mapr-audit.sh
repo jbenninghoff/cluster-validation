@@ -4,7 +4,6 @@
 # A script to probe an installed MapR system configuration, writing all results to stdout
 # Assumes clush is installed, available from EPEL repository
 # Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
-# Cluster Summary from log:  awk 'FNR==1 {print FILENAME}; /"version":/; /"cluster":/,/},/' mapr-audit.log
 
 verbose=false; terse=false; security=false; edge=false; group=all volacl=false
 while getopts ":dvtsea:g:" opt; do
@@ -89,6 +88,7 @@ cluster_checks1() {
 cluster_checks2() {
    msg="MapR System Stats "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    ${node:-} maprcli node list -columns hostname,cpus,mused; echo $sep
+   clush $parg "echo MapR Patch Installed; yum --noplugins list installed mapr-patch"; echo $sep
    clush $parg "echo 'MapR Storage Pools'; /opt/mapr/server/mrconfig sp list -v"; echo $sep
    msg="Customer Site Specific Volumes "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    ${node:-} maprcli volume list -filter "[n!=mapr.*] and [n!=*local*]" -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
@@ -193,7 +193,6 @@ security_checks() {
    clush $parg ${SUDO:-} 'echo Checking NFS Exports; grep -v -e ^# -e ^$ /opt/mapr/conf/exports /etc/exports'
    clush $parg ${SUDO:-} "echo Checking Current NFS Exports; showmount -e | sed -n '2,\$p'"
    clush $parg ${SUDO:-} "echo Checking Active NFS Mounts; showmount -a | sed -n '2,\$p'"; echo $sep
-   #clush $parg ${SUDO:-} "echo Is MapR Patch Installed?; yum list mapr-patch"
    clush $parg "echo Ownership of /opt/mapr Must Be root; stat -c '%U %G %A %a %n' /opt/mapr"
    clush $parg ${SUDO:-} "echo Find Setuid Executables in /opt/mapr;  find /opt/mapr -type f \( -perm -4100 -o -perm -2010 \) -exec stat -c '%U %G %A %a %n' {} \; |sort"
    #clush $parg ${SUDO:-} "echo Find Setuid Executables in /opt/mapr; find /opt/mapr -perm +6000 -type f -exec stat -c '%U %G %A %a %n' {} \; |sort"
@@ -248,3 +247,7 @@ maprcli_check
 [ "$edge" == "false" -a "$volacl" == "true" ] && volume_acls
 [ "$edge" == "true" ] && edgenode_checks
 [ "$security" == "true" ] && security_checks
+
+cat - <<EOF
+Cluster Summary from log:  awk 'FNR==1 {print FILENAME}; /"version":/; /"cluster":/,/},/' mapr-audit.log
+EOF
