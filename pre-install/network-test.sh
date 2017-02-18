@@ -37,7 +37,7 @@ iperfbin=iperf3 #Installed iperf3 {uses same options}
 iperfbin=$scriptdir/iperf #Packaged version
 rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
 rpctestbin=$scriptdir/rpctest #Packaged version
-tmpfile=$(mktemp); trap 'rm $tmpfile' 0 1 2 3 15
+tmpfile=$(mktemp); trap "rm $tmpfile; echo sigspec: $?; exit" EXIT
 #ssh() { /usr/bin/ssh -l root $@; }
 
 # Generate a host list array
@@ -52,7 +52,7 @@ fi
 
 # Generate an ip list array
 for host in ${hostlist[@]}; do
-   iplist+=( $(ssh $host hostname -i) )
+   iplist+=( $(ssh $host hostname -i) ) #TBD: check for more than 1 IP address
 done
 [ -n "$DBG" ] && echo iplist: ${iplist[@]}
 
@@ -96,6 +96,7 @@ if [ $(($len & 1)) -eq 1 ]; then
    half2=( ${half2[@]:0:$len} )
    [ -n "$DBG" ] && echo half2: ${half2[@]}
 fi
+[ -n "$DBG" ] && read -p "$DBG: Press enter to continue or ctrl-c to abort"
 
 ##### Servers ###############################################
 # Its possible but not recommended to manually define the array of server hosts
@@ -111,6 +112,7 @@ for node in "${half1[@]}"; do
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
 echo Servers have been launched
+[ -n "$DBG" ] && read -p "$DBG: Press enter to continue or ctrl-c to abort"
 sleep 5 # let the servers stabilize
 
 ##### Clients ###############################################

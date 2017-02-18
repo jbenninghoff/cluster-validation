@@ -1,11 +1,9 @@
 #!/bin/bash
 # jbenninghoff 2013-Jan-06  vi: set ai et sw=3 tabstop=3:
 
-[ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
-scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
-
 usage() {
 cat << EOF
+
 This script uses iozone to measure disk and disk controller bandwidth.
 These tests are DESTRUCTIVE therefore they must be run BEFORE 
 formatting the devices for the MapR filesystem (disksetup -F ...)
@@ -26,28 +24,31 @@ Options:
 -z: Specify test size in Gigabytes (default is 4 (4GB), quick test)
 -r: Run read-only dd based test
 -d: Enable debug statements
+
 EOF
 exit
 }
 
 disks=unused; seq=false; size=4; DBG=''
 while getopts "asdrz:-:" opt; do
-    case $opt in
-        -)
-            case "$OPTARG" in
-                all) disks=all ;; #Show all disks, not just umounted/unused disks
-                destroy) disks=destroy ;; #Run iozone on all unused disks, destroying data
-                *) echo "Invalid option --$OPTARG" >&2; usage ;;
-            esac;;
-        a) disks=all ;;
-        s) seq=true ;;
-        r) disks=readtest ;;
-        z) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && size=$OPTARG || { echo $OPTARG is not an number; exit; } ;;
-        d) DBG=true ;; # Enable debug statements
-        *) echo "Invalid option -$OPTARG" >&2; usage ;;
-    esac
+  case $opt in
+    -) case "$OPTARG" in
+         all) disks=all ;; #Show all disks, not just umounted/unused disks
+         destroy) disks=destroy ;; #Run iozone on all unused disks, destroying data
+         *) echo "Invalid option --$OPTARG" >&2; usage ;;
+       esac;;
+    a) disks=all ;;
+    s) seq=true ;;
+    r) disks=readtest ;;
+    z) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && size=$OPTARG || { echo $OPTARG is not an number; exit; } ;;
+    d) DBG=true ;; # Enable debug statements
+    *) usage ;;
+  esac
 done
 [ -n "$DBG" ] && read -p "Press enter to continue or ctrl-c to abort"
+
+[ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
+scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
 
 find_unused_disks() {
    [ -n "$DBG" ] && set -x
