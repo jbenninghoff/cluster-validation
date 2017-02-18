@@ -249,7 +249,7 @@ fi
 
 # Check for correct java version and set JAVA_HOME after MapR rpms are installed
 clush $clargs -g clstr "${SUDO:-} sed -i.bk \"s,^#export JAVA_HOME=,export JAVA_HOME=$JAVA_HOME,\" /opt/mapr/conf/env.sh"
-clush $clargs -g clstr "${SUDO:-} echo 'localhost:/mapr /mapr hard,intr,nolock,noatime' > /opt/mapr/conf/mapr_fstab"
+clush $clargs -g clstr "${SUDO:-} echo 'localhost:/mapr /mapr hard,intr,nolock,noatime' > /tmp/mapr_fstab; mv /tmp/mapr_fstab /opt/mapr/conf/mapr_fstab"
 clush $clargs -g clstr "${SUDO:-} mkdir /mapr"
 
 if [ "$secure" == "true" ]; then

@@ -65,7 +65,10 @@ if [[ $(id -u) -ne 0 && "$cluser" != "-l root" ]]; then
       #SUDO="echo $mypasswd | sudo -S -i "
    else
       SUDO='sudo PATH=/sbin:/usr/sbin:$PATH'
-      parg="-o -qtt $parg" # Add -qtt for sudo via ssh/clush
+      if clush $parg $parg1 -o -qtt "sudo grep '^Defaults.*requiretty' /etc/sudoers"; then
+         parg="-o -qtt $parg" # Add -qtt for sudo via ssh/clush
+         echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To remove ssh noise
+      fi
    fi
 fi
 
@@ -76,6 +79,14 @@ sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
 distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 sysd=$(clush $narg $parg1 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
+#TBD: check for required audit rpms: rpm -q bind-utils pciutils lsof dmidecode redhat-lsb-core epel-release
+if clush $parg $parg1 "rpm -q bind-utils pciutils lsof dmidecode redhat-lsb-core epel-release"; then
+   :
+else
+   echo RPMs required for audit not installed!
+   echo "Install on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils lsof dmidecode redhat-lsb-core epel-release'"
+   exit
+fi
 
 [ -n "$DBG" ] && { echo sysd: $sysd; echo serviceacct: $serviceacct; echo SUDO: $SUDO; echo parg: $parg; echo node: $node; }
 [ -n "$DBG" ] && exit
@@ -104,7 +115,7 @@ clush $parg "echo DIMM Details; ${SUDO:-} dmidecode -t memory | awk '/Memory Dev
 #clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed -e detected" 
 #clush $parg "ifconfig | awk '/^[^ ]/ && \$1 !~ /lo/{print \$1}' | xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
 clush $parg "${SUDO:-} lspci | grep -i ether"
-clush $parg "${SUDO:-} ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l ${SUDO:-} ethtool | grep -e ^Settings -e Speed"
+clush $parg "${SUDO:-} ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l ${SUDO:-} ethtool | grep -e ^Settings -e Speed -e Link"
 #clush $parg "echo -n 'Nic Speed: '; /sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l -I % cat /sys/class/net/%/speed"
 echo $sep
 [ -n "$DBG" ] && exit
@@ -147,7 +158,7 @@ case $distro in
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
    redhat|centos|red*)
-      clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark';echo $sep
+      clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
       pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core"
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed"; echo $sep
@@ -199,9 +210,14 @@ clush $parg "stat -c %a /tmp | grep 1777 || echo /tmp permissions not 1777" ; ec
 echo Check for tmpwatch on NM local dir
 clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"; echo $sep
 #FIX: clush -l root -ab "echo '/usr/sbin/tmpwatch \"\$flags\" -x /tmp/hadoop-mapr/nm-local-dir' >> /etc/cron.daily/tmpwatch" 
-#grep tmpwatch -R /etc/cron*/*
-#clush $parg 'echo JAVA_HOME is ${JAVA_HOME:-Not Defined!}'; echo $sep
-clush $parg $parg2 'echo "Java Version: "; java -version || echo See java-post-install.sh'; echo $sep
+# systemd-tmpfiles 'tmpfiles.d' man page.  Configuration 
+#in /usr/lib/tmpfiles.d/tmp.conf, and in /etc/tmpfiles.d/*.conf.
+
+echo Java Version
+clush $parg $parg2 'java -version || echo See java-post-install.sh'
+clush $parg $parg2 'yum list installed \*jdk\* \*java\*'
+clush $parg $parg2 'ls $(dirname $(readlink -f /usr/bin/java))/jps || echo JDK not installed'
+echo $sep
 echo Hostname IP addresses
 clush ${parg/-b /} 'hostname -I'; echo $sep
 echo DNS lookup
@@ -223,6 +239,7 @@ if [[ $(id -u) -eq 0 || "$parg" =~ root || "$SUDO" =~ sudo ]]; then
    clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'"; echo $sep
    echo Check for $serviceacct users java exec permission and version
    clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
+   clush $parg $parg2 "echo -n 'Locale setting(en_US): '; ${SUDO:-} su - $serviceacct -c 'locale |grep LANG'"; echo $sep
    echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
    clush $parg "${SUDO:-} ls ~$serviceacct/.ssh/authorized_keys*"; echo $sep
 elif [[ $(id -un) == $serviceacct ]]; then

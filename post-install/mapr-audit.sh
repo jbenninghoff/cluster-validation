@@ -1,9 +1,22 @@
 #!/bin/bash
 # jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
 
-# A script to probe an installed MapR system configuration, writing all results to stdout
-# Assumes clush is installed, available from EPEL repository
-# Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
+usage() {
+cat << EOF
+A script to probe an installed MapR cluster configuration, writing all results to stdout
+Assumes clush is installed (available from EPEL repository)
+Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
+
+Usage: $0 [-d] [-v|-t] [s] [-e] [-a] [-g <clush group name>]
+-d option for script debug
+-v option for more extensive auditing 
+-t option for a quick terse output
+-s option to audit the cluster for security
+-e option to audit an edge node
+-g option to specify a clush group other than all
+-a option to audit volume ACEs
+EOF
+}
 
 verbose=false; terse=false; security=false; edge=false; group=all volacl=false
 while getopts ":dvtsea:g:" opt; do
@@ -16,18 +29,12 @@ while getopts ":dvtsea:g:" opt; do
       g) group=$OPTARG ;;
       a) volacl=true; mntpt=$OPTARG ;;
       :) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
-      \?) echo "Invalid option: -$OPTARG" >&2; exit ;;
+      \?) echo "Invalid option: -$OPTARG" >&2; usage >&2; exit ;;
    esac
 done
 
 sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
-type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }
-[ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
 parg="-b -g ${group:-all}" 
-if [ ! -d /opt/mapr ]; then
-   echo MapR not installed locally!
-   clush $parg -S test -d /opt/mapr ||{ echo MapR not installed in node group $group; exit; }
-fi
 mrv=$(hadoop version |awk 'NR==1 {printf("%1.1s\n", $2)}')
 srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf || echo mapr) #guess at service acct if not found
 
@@ -64,9 +71,9 @@ cluster_checks1() {
    date; echo $sep
    msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    if [ "$mrv" == "1" ] ; then # MRv1
-      ${node:-} hadoop job -list; echo $sep
+      ${node:-} timeout 9 hadoop job -list; echo $sep
    else
-      ${node:-} mapred job -list; echo $sep
+      ${node:-} timeout 9 mapred job -list; echo $sep
    fi
    msg="MapR Dashboard "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    if (type -p jq >/dev/null); then
@@ -86,12 +93,11 @@ cluster_checks1() {
 }
 
 cluster_checks2() {
-   msg="MapR System Stats "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   ${node:-} maprcli node list -columns hostname,cpus,mused; echo $sep
+   echo ==================== Additional MapR audits ===========================
+   clush $parg "echo MapR /etc/shadow access:; ls -l /etc/shadow; id $srvid"; echo $sep
+   clush $parg "echo MapR HostID:; cat /opt/mapr/hostid"; echo $sep
    clush $parg "echo MapR Patch Installed; yum --noplugins list installed mapr-patch"; echo $sep
    clush $parg "echo 'MapR Storage Pools'; /opt/mapr/server/mrconfig sp list -v"; echo $sep
-   msg="Customer Site Specific Volumes "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   ${node:-} maprcli volume list -filter "[n!=mapr.*] and [n!=*local*]" -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
    clush $parg "echo 'Cat mapr-clusters.conf, Checking for MapR Mirror enabling'; cat /opt/mapr/conf/mapr-clusters.conf"; echo $sep
    #TBD: if mapr-clusters.conf has more than one line, look for mirror volumes {maprcli volume list -json |grep mirror???}
    clush $parg "echo 'MapR Env Settings'; grep ^export /opt/mapr/conf/env.sh"; echo $sep
@@ -108,6 +114,10 @@ cluster_checks2() {
    clush $parg "echo 'MapR Central Configuration Setting'; grep centralconfig /opt/mapr/conf/warden.conf"; echo $sep
    clush $parg "echo 'MapR Roles Per Host'; ls /opt/mapr/roles"; echo $sep
    #clush $parg "echo 'MapR Directories'; find /opt/mapr -maxdepth 1 -type d |sort"; echo $sep
+   msg="MapR System Stats "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   ${node:-} maprcli node list -columns hostname,cpus,mused; echo $sep
+   msg="Customer Site Specific Volumes "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   ${node:-} maprcli volume list -filter "[n!=mapr.*] and [n!=*local*]" -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
    echo
 }
 
@@ -150,6 +160,9 @@ indepth_checks() {
    #msg="List Unique File Owners, Down 4 Levels"; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    #${node:-} find $mntpt -maxdepth 4 -exec stat -c '%U' {} \; |sort -u; echo $sep #find uniq owners
    # TBD: check all hadoop* packages installed
+   clush -b -g zk -g cldb "echo 'ZK and CLDB nice values'; ps -ocomm,pid,nice $(</opt/mapr/zkdata/zookeeper_server.pid) $(</opt/mapr/pid/cldb.pid)"
+   echo $sep
+   clush $parg "echo 'Guts 6sec snapshot'; /opt/mapr/bin/guts cpu:none rpc:none cache:none db:none cleaner:none time:all dsec:6"; echo $sep
    [ -n "$dbg" ] && set +x
 }
 
@@ -242,12 +255,18 @@ volume_acls() {
 
 maprcli_check
 [ "$edge" == "false" ] && cluster_checks1
+type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }
+[ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
+if [ ! -d /opt/mapr ]; then
+   echo MapR not installed locally
+   clush $parg -S test -d /opt/mapr ||{ echo MapR not installed in node group $group; exit; }
+fi
 [ "$edge" == "false" -a "$terse" == "false" ] && cluster_checks2
 [ "$edge" == "false" -a "$verbose" == "true" ] && indepth_checks
 [ "$edge" == "false" -a "$volacl" == "true" ] && volume_acls
 [ "$edge" == "true" ] && edgenode_checks
 [ "$security" == "true" ] && security_checks
 
-cat - <<EOF
-Cluster Summary from log:  awk 'FNR==1 {print FILENAME}; /"version":/; /"cluster":/,/},/' mapr-audit.log
-EOF
+cat - <<EOF2
+Cluster Summary from log: awk 'FNR==1 {print FILENAME}; /[ \t]+"version":/; /[ \t]+"cluster":/,/},/' mapr-audit-*.log
+EOF2
