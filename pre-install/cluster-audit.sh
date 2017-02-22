@@ -80,7 +80,7 @@ distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat'
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 sysd=$(clush $narg $parg1 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
 #TBD: check for required audit rpms: rpm -q bind-utils pciutils lsof dmidecode redhat-lsb-core epel-release
-if clush $parg $parg1 "rpm -q bind-utils pciutils lsof dmidecode redhat-lsb-core epel-release"; then
+if clush $parg $parg1 "rpm -q bind-utils pciutils dmidecode"; then
    :
 else
    echo RPMs required for audit not installed!
@@ -210,7 +210,7 @@ clush $parg "stat -c %a /tmp | grep 1777 || echo /tmp permissions not 1777" ; ec
 echo Check for tmpwatch on NM local dir
 clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"; echo $sep
 #FIX: clush -l root -ab "echo '/usr/sbin/tmpwatch \"\$flags\" -x /tmp/hadoop-mapr/nm-local-dir' >> /etc/cron.daily/tmpwatch" 
-# systemd-tmpfiles 'tmpfiles.d' man page.  Configuration 
+#TBD: systemd-tmpfiles 'tmpfiles.d' man page.  Configuration 
 #in /usr/lib/tmpfiles.d/tmp.conf, and in /etc/tmpfiles.d/*.conf.
 
 echo Java Version
