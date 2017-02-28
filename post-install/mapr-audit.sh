@@ -106,9 +106,12 @@ cluster_checks2() {
       clush $parg "echo 'core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-0.20.2/conf/core-site.xml"; echo $sep
       clush $parg "echo 'MapR Central Logging Setting'; grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh"; echo $sep
    else
-      clush $parg "echo 'MR2 core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.7.0/etc/hadoop/core-site.xml"; echo $sep
-      clush $parg "echo 'MR2 mapred-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.7.0/etc/hadoop/mapred-site.xml"; echo $sep
-      clush $parg "echo 'MR2 yarn-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.7.0/etc/hadoop/yarn-site.xml"; echo $sep
+      clush $parg "echo 'MR2 core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"; echo $sep
+      clush $parg "echo 'MR2 core-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"; echo $sep
+      clush $parg "echo 'MR2 mapred-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/mapred-site.xml"; echo $sep
+      clush $parg "echo 'MR2 mapred-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/mapred-site.xml"; echo $sep
+      clush $parg "echo 'MR2 yarn-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/yarn-site.xml"; echo $sep
+      clush $parg "echo 'MR2 yarn-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/yarn-site.xml"; echo $sep
       hadoop conf-details print-all-effective-properties |grep central-logging
    fi
    clush $parg "echo 'MapR Central Configuration Setting'; grep centralconfig /opt/mapr/conf/warden.conf"; echo $sep
@@ -211,10 +214,10 @@ security_checks() {
    #clush $parg ${SUDO:-} "echo Find Setuid Executables in /opt/mapr; find /opt/mapr -perm +6000 -type f -exec stat -c '%U %G %A %a %n' {} \; |sort"
    clush $parg "awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf" # Check MapR JPAM settings
    clush $parg "echo CheckSum of /etc/pam.d files; awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf | awk -F= '/serviceName/{print \$2}' |tr -d \\042  | xargs -i sh -c 'echo -n -e /etc/pam.d/{} \\\t; sum /etc/pam.d/{}'"
-   clush $parg "echo 'HiveServer2 Impersonation'; ls /opt/mapr/roles |grep -q hiveserver2 && awk '/<prop/,/<\/prop>/ {if (/enable.doAs/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo HiveServer2 not installed"
-   clush $parg "echo 'Hive MetaStore Impersonation'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop>/ {if (/setugi/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo Hive MetaStore not installed"
-   clush $parg "echo 'Hive MetaStore Password'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop>/ {if (/javax.jdo.option.ConnectionPassword/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml"
-   clush $parg "echo 'Hadoop Proxy Users'; awk '/<prop/,/<\/prop>/ {if (/proxyuser/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"
+   clush $parg "echo 'HiveServer2 Impersonation'; ls /opt/mapr/roles |grep -q hiveserver2 && awk '/<prop/,/<\/prop/ {if (/enable.doAs/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo HiveServer2 not installed"
+   clush $parg "echo 'Hive MetaStore Impersonation'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop/ {if (/setugi/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo Hive MetaStore not installed"
+   clush $parg "echo 'Hive MetaStore Password'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop/ {if (/javax.jdo.option.ConnectionPassword/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml"
+   clush $parg "echo 'Hadoop Proxy Users'; awk '/<prop/,/<\/prop/ {if (/proxyuser/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"
    clush $parg "echo 'MapR Proxy Users'; ls /opt/mapr/conf/proxy"
    clush $parg "echo 'Drill Impersonation'; ls /opt/mapr/roles |grep -q drill && awk '/impersonation/,/}/ {if (/enabled:/) print}' /opt/mapr/drill/drill-1.*/conf/drill-override.conf || echo Drill not installed"
    clush $parg "echo 'Oozie Proxy Settings '; ls /opt/mapr/roles |grep -q oozie && awk '/<prop/,/<\/prop/ {if (/ProxyUserService/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/oozie/oozie-*/conf/oozie-site.xml || echo Oozie not installed"
@@ -255,7 +258,7 @@ volume_acls() {
 
 maprcli_check
 [ "$edge" == "false" ] && cluster_checks1
-type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }
+type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }; echo $sep
 [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
 if [ ! -d /opt/mapr ]; then
    echo MapR not installed locally
