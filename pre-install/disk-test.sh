@@ -87,7 +87,8 @@ find_unused_disks() {
 
 ##############################################################################
 pgrep iozone && { echo 'iozone appears to be running, kill all iozones running (e.g. pkill iozone)'; exit; }
-find_unused_disks #sets $disklist
+files=$(ls *-{dd,iozone}.log 2>/dev/null); [ -n "$files" ] && { tar czf disk-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }#tar up previous log files
+find_unused_disks #Sets $disklist
 echo $disklist | tr ' ' '\n' >/tmp/disk.list #write disk list for MapR install
 [ -n "$DBG" ] && cat /tmp/disk.list
 
@@ -121,7 +122,7 @@ case "$disks" in
       [ -n "$DBG" ] && set -x
       service mapr-warden status && { echo 'MapR warden appears to be running, stop warden (e.g. service mapr-warden stop)'; exit; }
       for disk in $disklist; do
-         iozlog=`basename $disk`-iozone.log
+         iozlog=$(basename $disk)-iozone.log
          if [ $seq == "true" ]; then
             $scriptdir/iozone -I -r 1M -s ${size}G -+n -i 0 -i 1 -i 2 -f $disk > $iozlog #sequential iozone if disk controller suspected
          else
