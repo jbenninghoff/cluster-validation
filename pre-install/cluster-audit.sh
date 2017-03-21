@@ -225,7 +225,7 @@ clush ${parg/-b /} 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup
 clush ${parg/-b /} 'host $(hostname -i)'; echo $sep
 echo Check for system wide nproc and nofile limits
-clush $parg "${SUDO:-} grep -e nproc -e nofile /etc/security/limits.d/*nproc.conf /etc/security/limits.conf |grep -v ':#' "; echo $sep
+clush $parg "${SUDO:-} grep -e nproc -e nofile /etc/security/limits.d/*.conf /etc/security/limits.conf |grep -v ':#' "; echo $sep
 echo Check for root ownership of /opt/mapr  
 clush $parg $parg2 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'; echo $sep
 echo "Check for $serviceacct login"
@@ -239,7 +239,7 @@ if [[ $(id -u) -eq 0 || "$parg" =~ root || "$SUDO" =~ sudo ]]; then
    clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'"; echo $sep
    echo Check for $serviceacct users java exec permission and version
    clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
-   clush $parg $parg2 "echo -n 'Locale setting(en_US): '; ${SUDO:-} su - $serviceacct -c 'locale |grep LANG'"; echo $sep
+   clush $parg $parg2 "echo -n 'Locale setting(en_US): '; ${SUDO:-} su - $serviceacct -c 'locale |grep LANG'" | awk '!/en_US/{print "LANG must be en_US:", $0}; /en_US/'; echo $sep
    echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
    clush $parg "${SUDO:-} ls ~$serviceacct/.ssh/authorized_keys*"; echo $sep
 elif [[ $(id -un) == $serviceacct ]]; then

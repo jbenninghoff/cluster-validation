@@ -44,7 +44,7 @@ iperfbin=iperf3 #Installed iperf3 {uses same options}
 iperfbin=$scriptdir/iperf #Packaged version
 rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
 rpctestbin=$scriptdir/rpctest #Packaged version
-tmpfile=$(mktemp); trap "rm $tmpfile; echo sigspec: $?; exit" EXIT
+tmpfile=$(mktemp); trap "rm $tmpfile; echo EXIT sigspec: $?; exit" EXIT
 #ssh() { /usr/bin/ssh -l root $@; }
 
 # Generate a host list array
@@ -53,7 +53,7 @@ if type nodeset >& /dev/null; then
 elif [ -f ~/host.list ]; then
    hostlist=( $(< ~/host.list) )
 else
-   echo "This test requires a host list via clush/nodeset or ~/host.list " >&2; exit
+   echo 'This test requires a host list via clush/nodeset or $HOME/host.list file, one host per line' >&2; exit
 fi
 [ -n "$DBG" ] && echo hostlist: ${hostlist[@]}
 

@@ -44,7 +44,7 @@ fi
 MFS_TEST_JAR=$(find $MAPR_HOME/lib -name maprfs-diagnostic-tools-\*.jar)
 
 #set number of Java processes to half the number of data drives
-ndisk=$(/opt/mapr/server/mrconfig sp list -v | grep -o '/dev/[^ ]*' | sort -u | wc -l)
+ndisk=$(/opt/mapr/server/mrconfig sp list -v | grep -o '/dev/[^ ,]*' | sort -u | wc -l)
 #ndisk=$(maprcli node list -columns service,'MapRfs disks' |grep nodemanager | awk '{split($0,arr1); for (x in arr1) { if (match(x,/^[0-9]+$/) > 0) print x; count+=x}}; END{print count}')
 echo ndisk: $ndisk
 (( ndisk=ndisk/2 ))
