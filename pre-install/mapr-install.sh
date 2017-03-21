@@ -53,18 +53,19 @@ for grp in clstr cldb zk rm hist; do #Check for clush groups to layout mapr serv
    [ $(nodeset -c @$grp) -gt 0 ] || { echo clustershell group: $grp undefined; exit 1; }
 done
 cldb1=$(nodeset -I0 -e @cldb) #first node in cldb group
-[[ -z "${clname// /}" ]] && { echo Cluster name not set.  Set clname in this script; exit 2; }
-[[ -z "${admin1// /}" ]] && { echo Admin name not set.  Set admin1 in this script; exit 2; }
-[[ -z "${cldb1// /}" ]] && { echo Primary node name not set.  Set or check cldb1 in this script; exit 2; }
+[[ -z "$clname" ]] && { echo Cluster name not set.  Set clname in this script; exit 2; }
+[[ -z "$admin1" ]] && { echo Admin name not set.  Set admin1 in this script; exit 2; }
+[[ -z "$cldb1" ]] && { echo Primary node name not set.  Set or check cldb1 in this script; exit 2; }
 clush -S -B -g clstr id $admin1 || { echo $admin1 account does not exist on all nodes; exit 3; }
-clush -S -B -g clstr id $mapruid || { echo mapr account does not exist on all nodes; exit 3; }
+clush -S -B -g clstr id $mapruid || { echo $mapruid account does not exist on all nodes; exit 3; }
 clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" || { echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit; exit 3; }
-clush -S -B -g clstr 'echo Check repo; grep -qi mapr /etc/yum.repos.d/*' || { echo MapR repos not found; exit 3; }
-clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
+clush -S -B -g clstr 'echo "MapR RPM Check "; yum -q search mapr-core' || { echo MapR RPMs not found; exit 3; }
+#clush -S -B -g clstr 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl' || { echo MapR repos not found; }
+#clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
 #TBD check for gpgcheck and key(s)
 read -p "All checks passed, press enter to continue or ctrl-c to abort"
 
-install-patch() { #Find, Download and install mapr-patch v5.1.x
+install-patch() { #Find, Download and install mapr-patch version $maprver
    inrepo=false; clush -S -B -g clstr ${SUDO:-} "yum info mapr-patch" && inrepo=true
    if [ "$inrepo" == "true" ]; then
       clush -v -g clstr ${SUDO:-} "yum -y install mapr-patch"
@@ -185,7 +186,7 @@ if [ "$edge" == "true" ]; then
       #clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-client mapr-posix-client-basic"; clnt="-c " #Edge node LBrands
       clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-core mapr-posix-client-basic" #Enables edge node to use warden to run HS2,Metastore,etc
       #clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-client mapr-nfs" #Enables edge node as simple client with loopback NFS to maprfs
-      #If mapr-core installed, install-patch?
+      #If mapr-core installed, install patch?
       if [ "$secure" == "true" ]; then
          scp "root@$cldb1:/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
          clush -g edge -c ssl_truststore --dest /opt/mapr/conf/
