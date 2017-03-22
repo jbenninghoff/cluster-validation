@@ -179,6 +179,8 @@ case $distro in
             clush $parg "${SUDO:-} chkconfig --list iptables" ; echo $sep
             clush $parg "${SUDO:-} service iptables status | head -10"; echo $sep
             clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} service cpuspeed status"; echo $sep
+            clush $parg ${SUDO:-} 'service sssd status|sed "s/(.*)//" && chkconfig --list sssd | grep -e 3:on -e 5:on >/dev/null'
+            clush $parg ${SUDO:-} 'wc /etc/sssd/sssd.conf' #TBD: Check sssd settings and add sysd checks
             #clush $parg "/sbin/service iptables status | grep -m 3 -e ^Table -e ^Chain" 
             #clush $parg "echo -n 'Frequency Governor: '; for dev in /sys/devices/system/cpu/cpu[0-9]*; do cat \$dev/cpufreq/scaling_governor; done | uniq -c" 
             #clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
@@ -216,7 +218,7 @@ clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwat
 echo Java Version
 clush $parg $parg2 'java -version || echo See java-post-install.sh'
 clush $parg $parg2 'yum list installed \*jdk\* \*java\*'
-clush $parg $parg2 'ls $(dirname $(readlink -f /usr/bin/java))/jps || echo JDK not installed'
+clush $parg $parg2 'javadir=$(dirname $(readlink -f /usr/bin/java); test -x $javadir/jps || { test -x $javadir/../../bin/jps || echo JDK not installed; }'
 echo $sep
 echo Hostname IP addresses
 clush ${parg/-b /} 'hostname -I'; echo $sep

@@ -44,9 +44,11 @@ maprver=v5.2.0 #TBD: Grep repo file to confirm or alter
 clargs='-S'
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
+(umask 0077 && echo JAVA_HOME=$JAVA_HOME >> $HOME/.ssh/environment) #MapR rpm installs look for $JAVE_HOME, all clush/ssh cmds will forward setting
 [ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
+
 #[ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #TBD: Use sudo, assuming account has password-less sudo  (sudo -i)?
-#clush() { /Users/jbenninghoff/bin/clush -l root $@; } #To launch this script as non-root
+#clush() { /Users/jbenninghoff/bin/clush -l root $@; } #Example of how to launch this script as non-root
 
 # Check cluster for pre-requisites
 for grp in clstr cldb zk rm hist; do #Check for clush groups to layout mapr services
@@ -242,21 +244,19 @@ if [ "$admin" == "true" ]; then
    clush $clargs -g rm,cldb "${SUDO:-} yum -y erase mapr-nodemanager"
 fi
 
-# Check for correct java version and set JAVA_HOME after MapR rpms are installed
+#Check for correct java version and set JAVA_HOME after MapR rpms are installed
 clush $clargs -g clstr "${SUDO:-} sed -i.bk \"s,^#export JAVA_HOME=,export JAVA_HOME=$JAVA_HOME,\" /opt/mapr/conf/env.sh"
 clush $clargs -g clstr "${SUDO:-} echo 'localhost:/mapr /mapr hard,intr,nolock,noatime' > /tmp/mapr_fstab; mv /tmp/mapr_fstab /opt/mapr/conf/mapr_fstab"
 clush $clargs -g clstr "${SUDO:-} mkdir /mapr"
 
 if [ "$secure" == "true" ]; then
-   # Configure primary CLDB node with security keys
+   #Configure primary CLDB node with security keys, exit if configure.sh fails
    clush -S $clargs -w $cldb1 "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -S -genkeys -u $mapruid -g $maprgid -no-autostart"
    [ $? -ne 0 ] && { echo configure.sh failed, check screen and $cldb1:/opt/mapr/logs for errors; exit 2; }
-   #read -p "Press enter to continue or ctrl-c to abort"
    scp "root@$cldb1:/opt/mapr/conf/{cldb.key,ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
-   #echo Needs testing
-   clush -g cldb -x $cldb1 -c cldb.key --dest /opt/mapr/conf/
-   clush $clargs -g cldb -x $cldb1 "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/cldb.key"
-   clush $clargs -g cldb -x $cldb1 "${SUDO:-} chmod 600 /opt/mapr/conf/cldb.key"
+   clush -g cldb,zk -x $cldb1 -c cldb.key --dest /opt/mapr/conf/
+   clush $clargs -g cldb,zk -x $cldb1 "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/cldb.key"
+   clush $clargs -g cldb,zk -x $cldb1 "${SUDO:-} chmod 600 /opt/mapr/conf/cldb.key"
    clush -g clstr -x $cldb1 -c ssl_truststore --dest /opt/mapr/conf/
    clush -g clstr -x $cldb1 -c ssl_keystore --dest /opt/mapr/conf/
    clush -g clstr -x $cldb1 -c maprserverticket --dest /opt/mapr/conf/
