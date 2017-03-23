@@ -56,8 +56,8 @@ case $chunksize in
       -Dmapreduce.map.java.opts="-Xmx1900m -Xms1900m" \
       -Dmapreduce.task.io.sort.mb=1500 \
       -Dmapreduce.task.io.sort.factor=100 \
-      -Dmapreduce.reduce.disk=0 \
-      -Dmapreduce.reduce.cpu.vcores=0 \
+#      -Dmapreduce.reduce.disk=0.5 \
+#      -Dmapreduce.reduce.cpu.vcores=1 \
       -Dmapreduce.reduce.shuffle.parallelcopies=$nodes \
       -Dmapreduce.reduce.merge.inmem.threshold=0 \
       -Dmapreduce.job.reduces=$rtasks \
@@ -73,8 +73,8 @@ case $chunksize in
       -Dmapreduce.map.cpu.vcores=0 \
       -Dmapreduce.map.output.compress=false \
       -Dmapreduce.map.sort.spill.percent=0.99 \
-      -Dmapreduce.reduce.disk=0 \
-      -Dmapreduce.reduce.cpu.vcores=0 \
+#      -Dmapreduce.reduce.disk=1.33 \
+#      -Dmapreduce.reduce.cpu.vcores=1 \      
       -Dmapreduce.reduce.shuffle.parallelcopies=$nodes \
       -Dmapreduce.reduce.merge.inmem.threshold=0 \
       -Dmapreduce.task.io.sort.mb=480 \

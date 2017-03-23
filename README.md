@@ -6,7 +6,8 @@ software that MapR will be dependent on.  Doing so will verify that items like
 disks and DIMMs are performing as expected and with a known benchmark metric.
 Doing so will also verify that many of the basic OS configurations and
 packages are in the required state and that state is also recorded in the
-output log.
+output log.  For additional insight into why, see Wiki page:
+https://github.com/MapRPS/cluster-validation/wiki/Why-Cluster-Validation
 
 Please use the steps below to test CPU/RAM, disk, and networking
 performance as well as to verify that your cluster meets MapR
