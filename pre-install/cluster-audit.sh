@@ -3,13 +3,22 @@
 #set -o nounset
 #set -o errexit
 
-# A sequence of parallel shell commands probing for system configuration
-# and highlighting differences between the nodes in a cluster by using clush.
-#
-# The script requires that the clush utility (a parallel ssh tool)
-# be installed and configured using passwordless ssh connectivity for root to
-# all the nodes under test.  Or passwordless sudo for a non-root account.
-# use -l mapr when run from Mac
+usage() {
+cat << EOF
+Usage: $0 -g -d -l
+-g To specify clush group other than "all"
+-d To enable debug output
+-l To specify clush/ssh user other than $USER
+
+This script is a sequence of parallel shell commands probing for current system configuration
+and highlighting differences between the nodes in a cluster.
+
+The script requires that the clush utility (a parallel ssh tool)
+be installed and configured using passwordless ssh connectivity for root to
+all the nodes under test.  Or passwordless sudo for a non-root account.
+Use -l mapr for example if mapr account has passwordless sudo rights.
+EOF
+}
 
 # Handle script options
 DBG=""; group=all; cluser=""
@@ -18,18 +27,26 @@ while getopts "dl:g:" opt; do
     d) DBG=true ;;
     g) group=$OPTARG ;;
     l) cluser="-l $OPTARG" ;;
-    \?) echo "Invalid option: -$OPTARG" >&2; usage ;;
+    \?) usage; exit ;;
   esac
 done
 [ -n "$DBG" ] && set -x
 
+# Set some global variables
+sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
+distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
+distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
+#distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
+#serviceacct=mapr #Set if service account is not 'mapr'
+
 # Check for clush and provide alt if not found
 if ! type clush >& /dev/null; then
-   clush() { eval "$@"; } #clush becomes no-op, all commands run locally
+   clush() { eval "$@"; } #clush becomes no-op, all commands run locally doing a single node inspection
+   echo clush not found, doing a single node inspection without ssh
    #clush() { for h in $(<~/host.list); do; ssh $h $@; done; } #ssh in for loop :-(
 else
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
-   #grep -q ${group:-all}: /etc/clustershell/groups || { echo group: ${group:-all} does not exist; exit 2; }
+   echo $sep
    #clush specific arguments
    parg="${cluser} -b -g ${group:-all}"
    parg1="-S"
@@ -37,12 +54,15 @@ else
    parg3="-u 30"
    node=$(nodeset -I0 -e @${group:-all})
    narg="-w $node -o -qtt"
+   echo Try: "(umask 0077 && sed -i -e '/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:a;n;ba;q}' -e '$aStrictHostKeyChecking no' $HOME/.ssh/config)"
+   echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To remove ssh noise
+   #(umask 0077 && printf "ServerAliveInterval 99\nStrictHostKeyChecking no\nLogLevel ERROR\n" >> $HOME/.ssh/config)
    # Common arguments to pass in to clush execution
    #clcnt=$(nodeset -c @all)
    #parg="$parg -f $clcnt" #fanout set to cluster node count
    #parg="-o '-oLogLevel=ERROR' $parg"
 fi
-[ -n "$DBG" ] && { clush $parg $parg1 ${parg3/0 /} date || { echo clush failed; exit 3; }; }
+[ -n "$DBG" ] && { clush $parg $parg1 ${parg3/0 /} date || { echo clush failed; usage; exit 3; }; }
 
 # Locate or guess MapR Service Account
 if [ -f /opt/mapr/conf/daemon.conf ]; then
@@ -72,19 +92,13 @@ if [[ $(id -u) -ne 0 && "$cluser" != "-l root" ]]; then
    fi
 fi
 
-# Set separator and Linux distro and systemd
-#sep=$(printf %80s); sep=${sep// /=} #Substitute all blanks with ======
-sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
-#distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
-distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
-distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
+# Check for systemd and basic RPMs
 sysd=$(clush $narg $parg1 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
-#TBD: check for required audit rpms: rpm -q bind-utils pciutils lsof dmidecode redhat-lsb-core epel-release
 if clush $parg $parg1 "rpm -q bind-utils pciutils dmidecode"; then
    :
 else
    echo RPMs required for audit not installed!
-   echo "Install on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils lsof dmidecode redhat-lsb-core epel-release'"
+   echo "Install on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils dmidecode'"
    exit
 fi
 

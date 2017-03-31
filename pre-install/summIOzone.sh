@@ -10,6 +10,7 @@ cat *-iozone.log | gawk '
 
 # Match beginning of IOzone output line and capture data fields
 #   /         4194304    1024/ {
+# Match header of IOzone output, get next line and then read data fields
    /KB  reclen +write/ {
      getline
      # err chk if NF < 8

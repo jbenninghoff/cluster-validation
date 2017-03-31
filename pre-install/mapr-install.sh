@@ -16,6 +16,8 @@ MapR Install methods:
 2) Bash script using clush groups and yum (this script)
 3) MapR GUI installer
 4) Ansible install playbooks
+
+Install of MapR must be done as root
 EOF
 exit 2
 }
@@ -33,6 +35,7 @@ while getopts "smuxae" opt; do
     \?) echo "Invalid option: -$OPTARG" >&2; usage ;;
   esac
 done
+[ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
 
 # Site specific variables
 clname='' #Name for the entire cluster, no spaces
@@ -45,7 +48,6 @@ clargs='-S'
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 (umask 0077 && echo JAVA_HOME=$JAVA_HOME >> $HOME/.ssh/environment) #MapR rpm installs look for $JAVE_HOME, all clush/ssh cmds will forward setting
-[ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
 
 #[ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #TBD: Use sudo, assuming account has password-less sudo  (sudo -i)?
 #clush() { /Users/jbenninghoff/bin/clush -l root $@; } #Example of how to launch this script as non-root
@@ -74,6 +76,7 @@ install-patch() { #Find, Download and install mapr-patch version $maprver
    else
       patchrpm=$(timeout 9 curl -s http://package.mapr.com/patches/releases/$maprver/redhat/ | sed -n "s/.*\(mapr-patch-${maprver//v}.*.rpm\).*/\1/p")
       if [ $? -ne 0 ]; then
+         #clush -v -g clstr ${SUDO:-} 'yum -y install file:///tmp/mapr-patch\*.rpm' #In case mapr-patch rpm cannot be added to local repo
          echo "Patch not found, patchrpm=$patchrpm"
       else
          clush -v -g clstr ${SUDO:-} "yum -y install http://package.mapr.com/patches/releases/$maprver/redhat/$patchrpm"
@@ -152,7 +155,7 @@ if [ "$uninstall" == "true" -a "$edge" == "false" ]; then
    clush $clargs -g clstr -b ${SUDO:-} pkill -u $mapruid
    clush $clargs -g clstr -b "${SUDO:-} ps ax | grep $mapruid"
    read -p "If any $mapruid process is still running, press ctrl-c to abort and kill all manually"
-   cp /opt/mapr/conf/disktab /var/tmp/
+   cp /opt/mapr/conf/disktab /var/tmp/mapr-disktab
    echo Copy of disktab saved to /var/tmp/
 
    shopt -s nocasematch
@@ -168,6 +171,8 @@ if [ "$uninstall" == "true" -a "$edge" == "false" ]; then
       *) echo Unknown Linux distro! $distro; exit ;;
    esac
    clush $clargs -g clstr -b ${SUDO:-} rm -rf /opt/mapr
+   clush $clargs -g clstr -b ${SUDO:-} rm -rf /tmp/hadoop-mapr
+   clush $clargs -g clstr -b ${SUDO:-} 'rm -rf /tmp/maprticket_*'
    exit
 fi
 
@@ -298,9 +303,10 @@ cat - << 'EOF2'
 You can use any browser to connect to mapr.com, in the upper right corner there is a login link.  login and register if you have not already.
 Once logged in, you can use the register button on the right of your login page to register a cluster by just entering a clusterid.
 You can get the cluster id with maprcli like this:
-maprcli dashboard info -json -cluster TestCluster |grep id
-                                "id":"4878526810219217706"
-Once you finish the register form, you will get back a license which you can copy and paste to a file on the same node you ran maprcli (corpmapr-r02 I believe).
+maprcli dashboard info -json |grep -e id -e name
+                "name":"ps",
+                "id":"5681466578299529065",
+Once you finish the register form, you will get back a license which you can copy and paste to a file on the same node you ran maprcli.
 Use that file as filename in the following maprcli command:
 maprcli license add -is_file true -license filename
 EOF2
