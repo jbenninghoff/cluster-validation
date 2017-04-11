@@ -10,8 +10,9 @@ Usage: $0 -g -d -l
 -d To enable debug output
 -l To specify clush/ssh user other than $USER
 
-This script is a sequence of parallel shell commands probing for current system configuration
-and highlighting differences between the nodes in a cluster.
+This script is a sequence of parallel shell commands probing for
+current system configuration and highlighting differences between
+the nodes in a cluster.
 
 The script requires that the clush utility (a parallel ssh tool)
 be installed and configured using passwordless ssh connectivity for root to
@@ -37,7 +38,6 @@ sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
 distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 #distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
-#serviceacct=mapr #Set if service account is not 'mapr'
 
 # Check for clush and provide alt if not found
 if ! type clush >& /dev/null; then
@@ -52,10 +52,10 @@ else
    parg1="-S"
    parg2="-B"
    parg3="-u 30"
+   parg4="-qNS -g ${group:-all}"
    node=$(nodeset -I0 -e @${group:-all})
    narg="-w $node -o -qtt"
-   echo Try: "(umask 0077 && sed -i -e '/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:a;n;ba;q}' -e '$aStrictHostKeyChecking no' $HOME/.ssh/config)"
-   echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To remove ssh noise
+   #echo Use: "(umask 0077 && sed -i -e '/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:a;n;ba;q}' -e '$aStrictHostKeyChecking no' $HOME/.ssh/config)" To remove ssh noise
    #(umask 0077 && printf "ServerAliveInterval 99\nStrictHostKeyChecking no\nLogLevel ERROR\n" >> $HOME/.ssh/config)
    # Common arguments to pass in to clush execution
    #clcnt=$(nodeset -c @all)
@@ -69,38 +69,43 @@ if [ -f /opt/mapr/conf/daemon.conf ]; then
    serviceacct=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
    [ -z "$serviceacct" ] && serviceacct=mapr #guess
 else
-   echo MapR core not installed locally!
    serviceacct=mapr #guess
-   clush $parg $parg1 test -d /opt/mapr || echo MapR not installed in node group $group
 fi
 
 # Define Sudo options if available
 if [[ $(id -u) -ne 0 && "$cluser" != "-l root" ]]; then
-   SUDO='env PATH=/sbin:/usr/sbin:$PATH'
-   if (clush $narg sudo -ln 2>&1 | grep 'sudo: a password is required'); then
-      :
-      #TBD: Support password-sudo using -S -i
-      #read -s -e -p 'Enter sudo password: ' mypasswd
+   if (clush $narg sudo -ln 2>&1 | grep -q 'sudo: a password is required'); then
+      read -s -e -p 'Enter sudo password: ' mypasswd
       #echo $mypasswd | sudo -S -i dmidecode -t bios || exit
-      #SUDO="echo $mypasswd | sudo -S -i "
+      SUDO="echo $mypasswd | sudo -S -i "
    else
-      SUDO='sudo PATH=/sbin:/usr/sbin:$PATH'
-      if clush $parg $parg1 -o -qtt "sudo grep '^Defaults.*requiretty' /etc/sudoers"; then
-         parg="-o -qtt $parg" # Add -qtt for sudo via ssh/clush
-         echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To remove ssh noise
-      fi
+      SUDO='sudo PATH=/sbin:/usr/sbin:$PATH '
+   fi
+   #TBD: Use clush without -o -qtt for better test of requiretty
+   if clush $parg4 -o -qtt "${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers"; then
+      parg="-o -qtt $parg" # Add -qtt for sudo via ssh/clush
+      echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To remove bogus tcgetattr ssh errors
    fi
 fi
 
 # Check for systemd and basic RPMs
-sysd=$(clush $narg $parg1 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
-if clush $parg $parg1 "rpm -q bind-utils pciutils dmidecode"; then
-   :
-else
-   echo RPMs required for audit not installed!
-   echo "Install on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils dmidecode'"
-   exit
-fi
+sysd=$(clush $parg4 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
+case $distro in
+   redhat|centos|red*)
+   if ! clush $parg $parg1 "rpm -q bind-utils pciutils dmidecode"; then
+      echo RPMs required for audit not installed!
+      echo "Install packages on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils dmidecode'"
+      exit
+   fi
+   ;;
+   ubuntu)
+   if ! clush $parg $parg1 "dpkg -l bind-utils pciutils dmidecode"; then
+      echo Packages required for audit not installed!
+      echo "Install packages on all nodes with clush: clush -ab 'dpkg -y install bind-utils pciutils dmidecode'"
+      exit
+   fi
+   ;;
+esac
 
 [ -n "$DBG" ] && { echo sysd: $sysd; echo serviceacct: $serviceacct; echo SUDO: $SUDO; echo parg: $parg; echo node: $node; }
 [ -n "$DBG" ] && exit
@@ -129,7 +134,8 @@ clush $parg "echo DIMM Details; ${SUDO:-} dmidecode -t memory | awk '/Memory Dev
 #clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed -e detected" 
 #clush $parg "ifconfig | awk '/^[^ ]/ && \$1 !~ /lo/{print \$1}' | xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
 clush $parg "${SUDO:-} lspci | grep -i ether"
-clush $parg "${SUDO:-} ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l ${SUDO:-} ethtool | grep -e ^Settings -e Speed -e Link"
+clush $parg ${SUDO:-} "ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l /sbin/ethtool | grep -e ^Settings -e Speed -e Link"
+#TBD: fix SUDO to find ethtool, not /sbin/ethtool
 #clush $parg "echo -n 'Nic Speed: '; /sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l -I % cat /sys/class/net/%/speed"
 echo $sep
 [ -n "$DBG" ] && exit
@@ -193,8 +199,8 @@ case $distro in
             clush $parg "${SUDO:-} chkconfig --list iptables" ; echo $sep
             clush $parg "${SUDO:-} service iptables status | head -10"; echo $sep
             clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} service cpuspeed status"; echo $sep
-            clush $parg ${SUDO:-} 'service sssd status|sed "s/(.*)//" && chkconfig --list sssd | grep -e 3:on -e 5:on >/dev/null'
-            clush $parg ${SUDO:-} 'wc /etc/sssd/sssd.conf' #TBD: Check sssd settings and add sysd checks
+            clush $parg "${SUDO:-} service sssd status|sed 's/(.*)//' && chkconfig --list sssd | grep -e 3:on -e 5:on >/dev/null"
+            clush $parg "${SUDO:-} wc /etc/sssd/sssd.conf" #TBD: Check sssd settings and add sysd checks
             #clush $parg "/sbin/service iptables status | grep -m 3 -e ^Table -e ^Chain" 
             #clush $parg "echo -n 'Frequency Governor: '; for dev in /sys/devices/system/cpu/cpu[0-9]*; do cat \$dev/cpufreq/scaling_governor; done | uniq -c" 
             #clush $parg "echo -n 'CPUspeed Service: '; ${SUDO:-} chkconfig --list cpuspeed"; echo $sep
@@ -232,7 +238,7 @@ clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwat
 echo Java Version
 clush $parg $parg2 'java -version || echo See java-post-install.sh'
 clush $parg $parg2 'yum list installed \*jdk\* \*java\*'
-clush $parg $parg2 'javadir=$(dirname $(readlink -f /usr/bin/java); test -x $javadir/jps || { test -x $javadir/../../bin/jps || echo JDK not installed; }'
+clush $parg $parg2 'javadir=$(dirname $(readlink -f /usr/bin/java)); test -x $javadir/jps || { test -x $javadir/../../bin/jps || echo JDK not installed; }'
 echo $sep
 echo Hostname IP addresses
 clush ${parg/-b /} 'hostname -I'; echo $sep
@@ -255,9 +261,9 @@ if [[ $(id -u) -eq 0 || "$parg" =~ root || "$SUDO" =~ sudo ]]; then
    clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'"; echo $sep
    echo Check for $serviceacct users java exec permission and version
    clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
-   clush $parg $parg2 "echo -n 'Locale setting(en_US): '; ${SUDO:-} su - $serviceacct -c 'locale |grep LANG'" | awk '!/en_US/{print "LANG must be en_US:", $0}; /en_US/'; echo $sep
+   clush $parg $parg2 "echo -n 'Locale setting(must be en_US): '; ${SUDO:-} su - $serviceacct -c 'locale |grep LANG'"; echo $sep
    echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
-   clush $parg "${SUDO:-} ls ~$serviceacct/.ssh/authorized_keys*"; echo $sep
+   clush $parg "${SUDO:-} ls ~$serviceacct/.ssh/authorized_keys"; echo $sep
 elif [[ $(id -un) == $serviceacct ]]; then
    echo Check for $serviceacct user specific open file and process limits
    clush $parg "echo -n 'Open process limit(should be >=32K): '; ulimit -u"
@@ -265,7 +271,7 @@ elif [[ $(id -un) == $serviceacct ]]; then
    echo Check for $serviceacct users java exec permission and version
    clush $parg $parg2 "echo -n 'Java version: '; java -version"; echo $sep
    echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
-   clush $parg "ls ~$serviceacct/.ssh/authorized_keys*"; echo $sep
+   clush $parg "ls ~$serviceacct/.ssh/authorized_keys\*"; echo $sep
 else
    echo Must have root access or sudo rights to check $serviceacct limits
 fi

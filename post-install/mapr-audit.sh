@@ -89,6 +89,8 @@ cluster_checks1() {
    ${node:-} maprcli node listzookeepers; echo $sep
    msg="Current MapR Version: "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    ${node:-} maprcli config load -keys mapr.targetversion
+   msg="Current MapR Licenses: "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   ${node:-} maprcli license list | grep -i lictype
    echo
 }
 
