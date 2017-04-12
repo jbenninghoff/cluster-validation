@@ -81,10 +81,9 @@ if [[ $(id -u) -ne 0 && "$cluser" != "-l root" ]]; then
    else
       SUDO='sudo PATH=/sbin:/usr/sbin:$PATH '
    fi
-   #TBD: Use clush without -o -qtt for better test of requiretty
-   if clush $parg4 -o -qtt "${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers"; then
-      parg="-o -qtt $parg" # Add -qtt for sudo via ssh/clush
-      echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To remove bogus tcgetattr ssh errors
+   if (clush $narg $parg1 "${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers" >& /dev/null); then
+      parg="-o -qtt $parg" # Add -qtt for sudo tty via ssh/clush
+      #echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To run sudo without a tty
    fi
 fi
 
@@ -99,9 +98,9 @@ case $distro in
    fi
    ;;
    ubuntu)
-   if ! clush $parg $parg1 "dpkg -l bind-utils pciutils dmidecode"; then
+   if ! clush $parg $parg1 "dpkg -l bind9utils pciutils dmidecode"; then
       echo Packages required for audit not installed!
-      echo "Install packages on all nodes with clush: clush -ab 'dpkg -y install bind-utils pciutils dmidecode'"
+      echo "Install packages on all nodes with clush: clush -ab 'apt-get -y install bind9utils pciutils dmidecode'"
       exit
    fi
    ;;
@@ -111,7 +110,7 @@ esac
 [ -n "$DBG" ] && exit
 
 
-echo "#################### Hardware audits ################################"
+echo;echo "#################### Hardware audits ################################"
 date; echo $sep
 # probe for system info ###############
 clush $parg "echo DMI Sys Info:; ${SUDO:-} dmidecode | grep -A2 '^System Information'"; echo $sep
@@ -148,7 +147,7 @@ clush $parg "echo 'Storage Controller: '; ${SUDO:-} lspci | grep -i -e ide -e ra
 clush $parg "echo 'SCSI RAID devices in dmesg: '; dmesg | grep -i raid | grep -i -o 'scsi.*$' |uniq"; echo $sep
 case $distro in
    ubuntu)
-   clush $parg "${SUDO:-} fdisk -l | grep '^Disk /.*:'"; echo $sep
+   clush $parg "${SUDO:-} fdisk -l | grep '^Disk /.*:' |sort"; echo $sep
    ;;
    redhat|centos|red*)
    clush $parg "echo 'Block Devices: '; lsblk -id | awk '{print \$1,\$4}'|sort | nl"; echo $sep
