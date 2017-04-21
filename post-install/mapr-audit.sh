@@ -87,7 +87,7 @@ cluster_checks2() {
    clush $parg "echo MapR /etc/shadow access:; ls -l /etc/shadow; id $srvid"; echo $sep
    clush $parg "echo MapR HostID:; cat /opt/mapr/hostid"; echo $sep
    clush $parg "echo MapR Patch Installed; yum --noplugins list installed mapr-patch"; echo $sep
-   clush $parg "echo 'MapR Storage Pools'; /opt/mapr/server/mrconfig sp list -v"; echo $sep
+   clush $parg "echo 'MapR Storage Pools'; ${SUDO:-} /opt/mapr/server/mrconfig sp list -v"; echo $sep
    clush $parg "echo 'Cat mapr-clusters.conf, Checking for MapR Mirror enabling'; cat /opt/mapr/conf/mapr-clusters.conf"; echo $sep
    #TBD: if mapr-clusters.conf has more than one line, look for mirror volumes {maprcli volume list -json |grep mirror???}
    clush $parg "echo 'MapR Env Settings'; grep ^export /opt/mapr/conf/env.sh"; echo $sep
@@ -135,8 +135,8 @@ cluster_checks3() {
    #echo MapR disk list per host
    clush $parg 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'; echo $sep
    clush $parg 'echo "MapR Disk List per Host"; maprcli disk list -output terse -system 0 -host $(hostname)'; echo $sep
-   clush $parg 'echo "MapR Disk Stripe Depth"; /opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'; echo $sep
-   clush $parg 'echo "MapR Disk Stripe Depth"; /opt/mapr/server/mrconfig dg list '; echo $sep
+   clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'; echo $sep
+   clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list '; echo $sep
    msg="MapR Complete Volume List "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    ${node:-} maprcli volume list -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
    msg="MapR Storage Pool Details "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
@@ -248,15 +248,16 @@ volume_acls() {
 
 # Define Sudo options if not running as service acct
 sudo_setup() {
-if [ $(id -u) != "$srvid" ]; then
-   if (clush $narg sudo -u $srvid -ln 2>&1 | grep -q 'sudo: a password is required'); then
+if [ $(id -un) != "$srvid" ]; then
+   snode=$(nodeset -I0 -e @$group)
+   if (ssh -qtt $snode sudo -U $srvid -ln 2>&1 | grep -q 'sudo: a password is required'); then
       read -s -e -p 'Enter sudo password: ' mypasswd
       #echo $mypasswd | sudo -S -i dmidecode -t bios || exit
       SUDO="echo $mypasswd | sudo -u $srvid -S -i "
    else
-      SUDO='sudo -u $srvid PATH=/sbin:/usr/sbin:$PATH '
+      SUDO="sudo -u $srvid PATH=/sbin:/usr/sbin:$PATH "
    fi
-   if (clush $narg $parg1 "${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers" >& /dev/null); then
+   if (clush $parg -S "${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers" >& /dev/null); then
       parg="-o -qtt $parg" # Add -qtt for sudo tty via ssh/clush
       #echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To run sudo without a tty
    fi
