@@ -1,7 +1,11 @@
 #!/bin/bash
+
 # script which summarizes iozone results on a set of disks
 # iozone results presumed to be in current folder in .log files
 # updated to work with AWS
+
+files=$(ls *-iozone.log 2>/dev/null)
+[ -n "$files" ] || { echo No iozone.log files found; exit 1; }
 
 cat *-iozone.log | gawk '
    BEGIN {

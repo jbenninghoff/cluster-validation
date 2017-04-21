@@ -87,10 +87,12 @@ find_unused_disks() {
 
 ##############################################################################
 pgrep iozone && { echo 'iozone appears to be running, kill all iozones running (e.g. pkill iozone)'; exit; }
-files=$(ls *-{dd,iozone}.log 2>/dev/null); [ -n "$files" ] && { tar czf disk-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }#tar up previous log files
+files=$(ls *-{dd,iozone}.log 2>/dev/null)
+[ -n "$files" ] && { tar czf disk-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; } #tar up previous log files
 find_unused_disks #Sets $disklist
 echo $disklist | tr ' ' '\n' >/tmp/disk.list #write disk list for MapR install
 [ -n "$DBG" ] && cat /tmp/disk.list
+[ -n "$DBG" ] && read -p "Press enter to continue or ctrl-c to abort"
 
 case "$disks" in
    all)

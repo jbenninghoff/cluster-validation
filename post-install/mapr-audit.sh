@@ -3,7 +3,7 @@
 
 usage() {
 cat << EOF
-A script to probe an installed MapR cluster configuration, writing all results to stdout
+This script probes an installed MapR cluster configuration, writing all results to stdout
 Assumes clush is installed (available from EPEL repository)
 Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
 
@@ -15,6 +15,7 @@ Usage: $0 [-d] [-v|-t] [s] [-e] [-a] [-g <clush group name>]
 -e option to audit an edge node
 -g option to specify a clush group other than all
 -a option to audit volume ACEs
+
 EOF
 }
 
@@ -29,7 +30,7 @@ while getopts ":dvtsea:g:" opt; do
       g) group=$OPTARG ;;
       a) volacl=true; mntpt=$OPTARG ;;
       :) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
-      \?) echo "Invalid option: -$OPTARG" >&2; usage >&2; exit ;;
+      \?) usage >&2; exit ;;
    esac
 done
 
@@ -37,19 +38,6 @@ sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
 parg="-b -g ${group:-all}" 
 mrv=$(hadoop version |awk 'NR==1 {printf("%1.1s\n", $2)}')
 srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf || echo mapr) #guess at service acct if not found
-
-if [ $(id -u) -ne 0 -a $(id -un) != "$srvid" ]; then
-   echo You must run this script as the MapR service account or root; exit
-fi
-if [ $(id -u) == "$srvid" ]; then
-   SUDO="sudo"
-   parg="-o -qtt $parg" # Add -qtt for sudo via ssh/clush
-   ${node:-} $SUDO -ln | grep 'sudo: a password is required' && exit
-   #TBD: Support password sudo using -S -i
-   #read -s -e -p 'Enter sudo password: ' mypasswd
-   #echo $mypasswd | sudo -S -i dmidecode -t bios || exit
-   #SUDO="echo $mypasswd | sudo -S -i "
-fi
 
 # Function definitions, overall function flow executed at end of script
 
@@ -140,7 +128,7 @@ edgenode_checks() {
    #TBD: Check Spark/Yarn config
 }
 
-indepth_checks() {
+cluster_checks3() {
    [ -n "$dbg" ] && set -x
    msg="Verbose audits "; printf "%s%s \n" "$msg" "${sep:${#msg}}"; echo
    #$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
@@ -258,20 +246,42 @@ volume_acls() {
    done
 }
 
+# Define Sudo options if not running as service acct
+sudo_setup() {
+if [ $(id -u) != "$srvid" ]; then
+   if (clush $narg sudo -u $srvid -ln 2>&1 | grep -q 'sudo: a password is required'); then
+      read -s -e -p 'Enter sudo password: ' mypasswd
+      #echo $mypasswd | sudo -S -i dmidecode -t bios || exit
+      SUDO="echo $mypasswd | sudo -u $srvid -S -i "
+   else
+      SUDO='sudo -u $srvid PATH=/sbin:/usr/sbin:$PATH '
+   fi
+   if (clush $narg $parg1 "${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers" >& /dev/null); then
+      parg="-o -qtt $parg" # Add -qtt for sudo tty via ssh/clush
+      #echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To run sudo without a tty
+   fi
+fi
+}
+
 maprcli_check
 [ "$edge" == "false" ] && cluster_checks1
-type clush >/dev/null 2>&1 || { echo clush required for this script; exit 1; }; echo $sep
-[ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
+
+type clush >/dev/null 2>&1 || { echo clush required for advanced options; exit 1; }; echo $sep
+if [ $(nodeset -c @${group:-all}) -gt 0 ]; then
+   echo NodeSet: $(nodeset -e @${group:-all})
+else
+   echo group: ${group:-all} does not exist; exit 2
+fi
 if [ ! -d /opt/mapr ]; then
    echo MapR not installed locally
    clush $parg -S test -d /opt/mapr ||{ echo MapR not installed in node group $group; exit; }
 fi
+
+sudo_setup
 [ "$edge" == "false" -a "$terse" == "false" ] && cluster_checks2
-[ "$edge" == "false" -a "$verbose" == "true" ] && indepth_checks
+[ "$edge" == "false" -a "$verbose" == "true" ] && cluster_checks3
 [ "$edge" == "false" -a "$volacl" == "true" ] && volume_acls
 [ "$edge" == "true" ] && edgenode_checks
 [ "$security" == "true" ] && security_checks
 
-cat - <<EOF2
-Cluster Summary from log: awk 'FNR==1 {print FILENAME}; /[ \t]+"version":/; /[ \t]+"cluster":/,/},/' mapr-audit-*.log
-EOF2
+echo "Extract cluster summary from log: awk 'FNR==1 {print FILENAME}; /[ \t]+\"version\":/; /[ \t]+\"cluster\":/,/},/' mapr-audit-*.log"

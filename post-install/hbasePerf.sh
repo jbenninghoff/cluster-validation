@@ -30,9 +30,7 @@ thrds=4
 #/usr/bin/time hbase org.apache.hadoop.hbase.PerformanceEvaluation scanRange1000 20 |& tee hbasePerfEvalScanRange1K20P.log
 
 # What does the table look like:
-hbase shell <<EOF
-scan '$table', {LIMIT=>20}
-EOF
+hbase shell <<< "scan '$table', {LIMIT=>20}"
 
 columns=$(stty -a | awk '/columns/{printf "%d\n",$7}')
 # How did the regions get distributed across the cluster nodes:

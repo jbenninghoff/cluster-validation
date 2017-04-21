@@ -21,3 +21,11 @@ storcli /c0 /eall /sall show | awk '$3 == "UGood"{print $1}'; exit
 
 #Assuming drive 17:7 is UGood.  1024 strip needs recent LSI/Avago controller and 7.x RHEL Linux kernel
 #sudo storcli /c0 add vd drives=17:7 type=r0 strip=1024 ra wb cached pdcache=off
+
+# Download 45MB zip file (July 2016):
+# https://docs.broadcom.com/docs/1.20.15_StorCLI
+
+# Use smartctl to examine MegaRAID virtual drives:
+# smartctl -a -d megaraid,0 /dev/sdd
+# Test unmount drives for bad spots and other problems:
+# smartctl -d megaraid,0 -t short /dev/sdd

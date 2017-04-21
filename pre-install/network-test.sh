@@ -57,7 +57,7 @@ else
 fi
 [ -n "$DBG" ] && echo hostlist: ${hostlist[@]}
 
-# Generate an ip list array
+# Convert host list into  an ip list array
 for host in ${hostlist[@]}; do
    iplist+=( $(ssh $host hostname -i) ) #TBD: check for more than 1 IP address
 done
@@ -82,7 +82,7 @@ half2=( ${iplist[@]:$len} ) #extract second half of array (clients)
 
 # Tar up old log files
 for host in ${half2[@]}; do
-   ssh $host 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); [ -n "$files" ] && { tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }'
+   ssh $host 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); [ -n "$files" ] && { tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; echo "Archive: network.*.tgz"; }'
 done
 
 # Sort client list
@@ -118,7 +118,7 @@ for node in "${half1[@]}"; do
   fi
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
-echo Servers have been launched
+echo ${#half1[@]} Servers have been launched
 sleep 5 # let the servers stabilize
 [ -n "$DBG" ] && read -p "$DBG: Press enter to continue or ctrl-c to abort"
 
@@ -129,7 +129,7 @@ sleep 5 # let the servers stabilize
 
 i=0 # index into the server array
 for node in "${half2[@]}"; do #Loop over all clients
-  [ -n "$DBG" ] && echo node: $node, half1-i: ${half1[$i]}
+  [ -n "$DBG" ] && echo client-node: $node, server-node: ${half1[$i]}
   if [ $concurrent == "true" ]; then
     if [ $runiperf == "true" ]; then
       #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -w 16K > ${half1[$i]}---$node-iperf.log" & #16K window size MapR uses
@@ -138,7 +138,7 @@ for node in "${half2[@]}"; do #Loop over all clients
       if [ $multinic == "true" ]; then
          ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log" &
       else
-         ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log" & #increase -n value 10x for better test
+         ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log" & #increase $size value 10x for better test
          [ $xtra == true ] && ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-2-rpctest.log" &
          [ -n "$DBG" ] && ssh -n $node "pgrep -lf $rpctestbin"
       fi
@@ -164,7 +164,7 @@ for node in "${half2[@]}"; do #Loop over all clients
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
 
-[ $concurrent == "true" ] && echo Clients have been launched
+[ $concurrent == "true" ] && echo ${#half2[@]} Clients have been launched
 [ $concurrent == "true" ] && { echo Waiting for PIDS: $clients; wait $clients; } #Wait for all clients to finish in concurrent run
 echo Wait over
 sleep 5
