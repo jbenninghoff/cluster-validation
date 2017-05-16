@@ -40,11 +40,7 @@ distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 #distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 
 # Check for clush and provide alt if not found
-if ! type clush >& /dev/null; then
-   clush() { eval "$@"; } #clush becomes no-op, all commands run locally doing a single node inspection
-   echo clush not found, doing a single node inspection without ssh
-   #clush() { for h in $(<~/host.list); do; ssh $h $@; done; } #ssh in for loop :-(
-else
+if type clush >& /dev/null; then
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
    echo $sep
    #clush specific arguments
@@ -61,6 +57,10 @@ else
    #clcnt=$(nodeset -c @all)
    #parg="$parg -f $clcnt" #fanout set to cluster node count
    #parg="-o '-oLogLevel=ERROR' $parg"
+else
+   echo clush not found, doing a single node inspection without ssh
+   clush() { eval "$@"; } #clush becomes no-op, all commands run locally doing a single node inspection
+   #clush() { for h in $(<~/host.list); do; ssh $h $@; done; } #ssh in for loop
 fi
 [ -n "$DBG" ] && { clush $parg $parg1 ${parg3/0 /} date || { echo clush failed; usage; exit 3; }; }
 
@@ -91,16 +91,16 @@ fi
 sysd=$(clush $parg4 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
 case $distro in
    redhat|centos|red*)
-   if ! clush $parg $parg1 "rpm -q bind-utils pciutils dmidecode"; then
+   if ! clush $parg $parg1 "rpm -q bind-utils pciutils dmidecode net-tools ethtool"; then
       echo RPMs required for audit not installed!
-      echo "Install packages on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils dmidecode'"
+      echo "Install packages on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils dmidecode net-tools ethtool'"
       exit
    fi
    ;;
    ubuntu)
-   if ! clush $parg $parg1 "dpkg -l bind9utils pciutils dmidecode"; then
+   if ! clush $parg $parg1 "dpkg -l bind9utils pciutils dmidecode net-tools ethtool"; then
       echo Packages required for audit not installed!
-      echo "Install packages on all nodes with clush: clush -ab 'apt-get -y install bind9utils pciutils dmidecode'"
+      echo "Install packages on all nodes with clush: clush -ab 'apt-get -y install bind9utils pciutils dmidecode net-tools ethtool'"
       exit
    fi
    ;;
@@ -179,9 +179,9 @@ case $distro in
    redhat|centos|red*)
       clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
-      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core"
+      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core ntp"
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed"; echo $sep
-      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils lsof lvm2 iftop ntop iotop atop ftop htop"
+      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils lsof lvm2 iftop ntop iotop atop ftop htop ntpdate tree net-tools ethtool"
       clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
       clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; ${SUDO:-} getenforce" ; echo $sep
       #TBD suggest: setenforce Permissive and sed -i.bak 's/enforcing/permissive/' /etc/selinux/config

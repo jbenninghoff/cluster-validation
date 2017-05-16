@@ -37,3 +37,5 @@ columns=$(stty -a | awk '/columns/{printf "%d\n",$7}')
 /opt/mapr/bin/maprcli table region list -path $table | cut -c -$columns
 # How did the regions get distributed across the storage pools:
 #./regionsp.py $table
+
+echo Get Throughput: grep '[0-9.]* MB/s' hbasePerfEval\*.log

@@ -85,6 +85,7 @@ cluster_checks1() {
 cluster_checks2() {
    echo ==================== Additional MapR audits ===========================
    clush $parg "echo MapR /etc/shadow access:; ls -l /etc/shadow; id $srvid"; echo $sep
+   clush $parg "echo 'MapR SHMEM Segments:'; ${SUDO:-} ipcs -m | uniq -w10"; echo $sep
    clush $parg "echo MapR HostID:; cat /opt/mapr/hostid"; echo $sep
    clush $parg "echo MapR Patch Installed; yum --noplugins list installed mapr-patch"; echo $sep
    clush $parg "echo 'MapR Storage Pools'; ${SUDO:-} /opt/mapr/server/mrconfig sp list -v"; echo $sep

@@ -63,7 +63,7 @@ cldb1=$(nodeset -I0 -e @cldb) #first node in cldb group
 clush -S -B -g clstr id $admin1 || { echo $admin1 account does not exist on all nodes; exit 3; }
 clush -S -B -g clstr id $mapruid || { echo $mapruid account does not exist on all nodes; exit 3; }
 clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" || { echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit; exit 3; }
-clush -S -B -g clstr 'echo "MapR RPM Check "; yum -q search mapr-core' || { echo MapR RPMs not found; exit 3; }
+clush -S -B -g clstr 'echo "MapR Repo Check "; yum -q search mapr-core' || { echo MapR RPMs not found; exit 3; }
 #clush -S -B -g clstr 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl' || { echo MapR repos not found; }
 #clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
 #TBD check for gpgcheck and key(s)
@@ -220,11 +220,15 @@ clush $clargs -B -g clstr 'test -f /opt/mapr/conf/disktab' && { echo MapR appear
 #clush $clargs -B -g clstr "cat /tmp/disk.list1; wc /tmp/disk.list1" || { echo /tmp/disk.list1 not found; exit 4; }
 #clush $clargs -B -g clstr "cat /tmp/disk.list2; wc /tmp/disk.list2" || { echo /tmp/disk.list2 not found; exit 4; }
 
-cat - <<EOF
-Assuming that all nodes have been audited with cluster-audit.sh and all issues fixed
-Assuming that all nodes have met subsystem performance expectations as measured by memory-test.sh, network-test.sh and disk-test.sh
-Scrutinize the disk list above.  All disks will be formatted for MapR FS, destroying all existing data on the disks
-If the disk list contains an OS disk or disk not intended for MapR FS, edit the disk-test.sh script to filter the output and rerun it
+cat <<EOF
+Assuming that all nodes have been audited with cluster-audit.sh and
+all issues fixed.  Also assuming that all nodes have met subsystem
+performance expectations as measured by memory-test.sh, network-test.sh
+and disk-test.sh.  Scrutinize the disk list above.  All disks will
+be formatted for MapR FS, destroying all existing data on the disks.
+If the disk list contains an OS disk or disk not intended for MapR
+FS, abort this script and edit the disk-test.sh script to filter
+the disk(s) and rerun it.
 EOF
 read -p "Press enter to continue or ctrl-c to abort"
 
@@ -299,7 +303,7 @@ echo With a web browser, connect to one of the webservers to continue with licen
 echo Webserver nodes: $(nodeset -S, -e @cldb)
 echo
 echo Alternatively, license can be installed with maprcli like this:
-cat - << 'EOF2'
+cat << 'EOF2'
 You can use any browser to connect to mapr.com, in the upper right corner there is a login link.  login and register if you have not already.
 Once logged in, you can use the register button on the right of your login page to register a cluster by just entering a clusterid.
 You can get the cluster id with maprcli like this:

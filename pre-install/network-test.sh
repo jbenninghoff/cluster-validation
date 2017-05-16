@@ -134,16 +134,20 @@ for node in "${half2[@]}"; do #Loop over all clients
     if [ $runiperf == "true" ]; then
       #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -w 16K > ${half1[$i]}---$node-iperf.log" & #16K window size MapR uses
       ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M > ${half1[$i]}---$node-iperf.log" &  #increase -n value 10x for better test
+      clients="$clients $!" #catch this client PID
     else
       if [ $multinic == "true" ]; then
          ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log" &
+         clients="$clients $!" #catch this client PID
       else
          ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log" & #increase $size value 10x for better test
-         [ $xtra == true ] && ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-2-rpctest.log" &
+         clients="$clients $!" #catch this client PID
+         [ $xtra == true ] && { ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-2-rpctest.log" & clients="$clients $!"; }
          [ -n "$DBG" ] && ssh -n $node "pgrep -lf $rpctestbin"
+         [ -n "$DBG" ] && { jobs -l; jobs -p; }
       fi
     fi
-    clients="$clients $!" #catch all client PIDs ($!)
+     [ -n "$DBG" ] && echo clients: "$clients $!"
   else #Sequential mode can be used to help isolate NIC and cable issues
     if [ $runiperf == "true" ]; then
       [ $xtra == true ] && ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -i3 > ${half1[$i]}---$node-s2-iperf.log" &
@@ -171,6 +175,7 @@ sleep 5
 
 # Handle the odd numbered node count case (extra node)
 if [ -n "$extraip" ]; then
+[ -n "$DBG" ] && set -x
    echo Measuring extra IP address
    ((i--)) #decrement to reuse last server in server list $half1
    if [ $runiperf == "true" ]; then
@@ -179,11 +184,13 @@ if [ -n "$extraip" ]; then
       ssh -n $extraip "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$extraip-rpctest.log"
    fi
    echo Extra IP address $extraip done.
+[ -n "$DBG" ] && set +x
 fi
 
 # Define list of client nodes to collect results from
 tmp=${half2[@]}
 [ -n "$extraip" ] && tmp="$tmp $extraip"
+[ -n "$DBG" ] && echo Clients: $tmp
 
 [ -n "$DBG" ] && read -p "$DBG: Press enter to continue or ctrl-c to abort"
 echo
