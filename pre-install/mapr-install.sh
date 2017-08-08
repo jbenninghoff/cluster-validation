@@ -3,8 +3,9 @@
 
 usage() {
 cat << EOF
-Usage: $0 -s -m|-e -u -x -a
+Usage: $0 -s -m|-e -u -x -a -k ServicePrincipalName
 -s option for secure cluster installation
+-k option for Kerberos cluster installation (implies -s)
 -m option for MFS only cluster installation
 -a option for cluster with dedicated admin nodes not running nodemanager
 -e option for to install on edge node (no fileserver). Can combine with -s or -x
@@ -12,21 +13,22 @@ Usage: $0 -s -m|-e -u -x -a
 -x option to uninstall existing cluster, destroying all data!
 
 MapR Install methods:
-1) Manually following http://doc.mapr.com documentation
+1) Manually following documentation at http://maprdocs.mapr.com/home/install.html
 2) Bash script using clush groups and yum (this script)
-3) MapR GUI installer
+3) MapR GUI installer (curl -LO http://package.mapr.com/releases/installer/mapr-setup.sh)
 4) Ansible install playbooks
 
-Install of MapR must be done as root
+Install of MapR must be done as root (or with passwordless sudo as mapr service account)
 EOF
 exit 2
 }
 
 # Handle script options
-secure=false; mfs=false; uninstall=false; upgrade=false; admin=false; edge=false
-while getopts "smuxae" opt; do
+secure=false; kerberos=false; mfs=false; uninstall=false; upgrade=false; admin=false; edge=false
+while getopts "smuxaek:" opt; do
   case $opt in
     s) secure=true; sopt="-S" ;;
+    k) kerberos=true; secure=true; sopt="-S"; pn="$OPTARG" ;;
     m) mfs=true ;;
     u) upgrade=true ;;
     x) uninstall=true ;;
@@ -35,7 +37,6 @@ while getopts "smuxae" opt; do
     \?) echo "Invalid option: -$OPTARG" >&2; usage ;;
   esac
 done
-[ $(id -u) -ne 0 ] && { echo This script must be run as root; exit 1; }
 
 # Site specific variables
 clname='' #Name for the entire cluster, no spaces
@@ -48,8 +49,8 @@ clargs='-S'
 export JAVA_HOME=/usr/java/default #Oracle JDK
 #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
 (umask 0077 && echo JAVA_HOME=$JAVA_HOME >> $HOME/.ssh/environment) #MapR rpm installs look for $JAVE_HOME, all clush/ssh cmds will forward setting
-
-#[ $(id -u) -ne 0 ] && SUDO="-o -qtt sudo"  #TBD: Use sudo, assuming account has password-less sudo  (sudo -i)?
+[ $(id -u) -ne 0 -a $(id un) != "$mapruid" ] && { echo This script must be run as root or $maprid; exit 1; }
+[ $(id -u) -ne 0 ] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH ' #Use sudo, assuming account has password-less sudo
 #clush() { /Users/jbenninghoff/bin/clush -l root $@; } #Example of how to launch this script as non-root
 
 # Check cluster for pre-requisites
@@ -190,8 +191,8 @@ if [ "$edge" == "true" ]; then
       clush $clargs -g edge -b ${SUDO:-} rm -rf /opt/mapr
       exit
    else
-      #clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-client mapr-posix-client-basic"; clnt="-c " #Edge node LBrands
       clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-core mapr-posix-client-basic" #Enables edge node to use warden to run HS2,Metastore,etc
+      #clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-client mapr-posix-client-basic"; clnt="-c " #Edge node without maprcli
       #clush $clargs -v -g edge "${SUDO:-} yum -y install mapr-client mapr-nfs" #Enables edge node as simple client with loopback NFS to maprfs
       #If mapr-core installed, install patch?
       if [ "$secure" == "true" ]; then
@@ -253,19 +254,23 @@ if [ "$admin" == "true" ]; then
    clush $clargs -g rm,cldb "${SUDO:-} yum -y erase mapr-nodemanager"
 fi
 
-#Check for correct java version and set JAVA_HOME after MapR rpms are installed
+#set JAVA_HOME after MapR rpms are installed
 clush $clargs -g clstr "${SUDO:-} sed -i.bk \"s,^#export JAVA_HOME=,export JAVA_HOME=$JAVA_HOME,\" /opt/mapr/conf/env.sh"
-clush $clargs -g clstr "${SUDO:-} echo 'localhost:/mapr /mapr hard,intr,nolock,noatime' > /tmp/mapr_fstab; mv /tmp/mapr_fstab /opt/mapr/conf/mapr_fstab"
-clush $clargs -g clstr "${SUDO:-} mkdir /mapr"
+echo 'localhost:/mapr /mapr hard,intr,nolock,noatime' | clush $clargs -g clstr "${SUDO:-} dd of=/opt/mapr/conf/mapr_fstab status=none"
+clush $clargs -g clstr "${SUDO:-} mkdir -p /mapr"
 
 if [ "$secure" == "true" ]; then
    #Configure primary CLDB node with security keys, exit if configure.sh fails
+   #TBD: Use -K and -P "mapr/clustername" to enable Kerberos $pn
    clush -S $clargs -w $cldb1 "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -S -genkeys -u $mapruid -g $maprgid -no-autostart"
    [ $? -ne 0 ] && { echo configure.sh failed, check screen and $cldb1:/opt/mapr/logs for errors; exit 2; }
-   scp "root@$cldb1:/opt/mapr/conf/{cldb.key,ssl_truststore,ssl_keystore,maprserverticket}" . #grab a copy of the keys
+   #pull a copy of the keys
+   scp "$cldb1:/opt/mapr/conf/{cldb.key,ssl_truststore,ssl_keystore,maprserverticket}" .
+   #Handle key copy with sudo/dd?
    clush -g cldb,zk -x $cldb1 -c cldb.key --dest /opt/mapr/conf/
    clush $clargs -g cldb,zk -x $cldb1 "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/cldb.key"
    clush $clargs -g cldb,zk -x $cldb1 "${SUDO:-} chmod 600 /opt/mapr/conf/cldb.key"
+
    clush -g clstr -x $cldb1 -c ssl_truststore --dest /opt/mapr/conf/
    clush -g clstr -x $cldb1 -c ssl_keystore --dest /opt/mapr/conf/
    clush -g clstr -x $cldb1 -c maprserverticket --dest /opt/mapr/conf/
@@ -295,6 +300,12 @@ clush $clargs -g clstr "${SUDO:-} service mapr-warden start"
 echo Waiting 2 minutes for system to initialize; end=$((SECONDS+120))
 sp='/-\|'; printf ' '; while [ $SECONDS -lt $end ]; do printf '\b%.1s' "$sp"; sp=${sp#?}${sp%???}; sleep .3; done # Spinner from StackOverflow
 
+#TBD: Handle mapruid install
+#uid=$(id un)
+#case $uid in
+#   root) ;;
+#   $mapruid) ;;
+#esac
 ssh -qtt root@$cldb1 "su - $mapruid -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node cldbmaster'" 
 [ $? -ne 0 ] && { echo CLDB did not startup, check status and logs on $cldb1; exit 3; }
 ssh -qtt root@$cldb1 "su - $mapruid -c 'MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli acl edit -type cluster -user $admin1:fc,a'"

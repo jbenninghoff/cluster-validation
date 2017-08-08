@@ -57,7 +57,9 @@ Step 1 : Gather Base Audit Information
 Use cluster-audit.sh to verify that you have met the MapR installation
 requirements.  Run:
 
-    /root/cluster-validation/pre-install/cluster-audit.sh | tee cluster-audit.log
+    cd /root/cluster-validation/pre-install
+    ./cluster-audit.sh | tee cluster-audit.log
+
 on the node where clush has been installed and configured to access
 all cluster nodes.  Examine the log for inconsistency among any nodes.  
 Do not proceed until all inconsistencies have been resolved and all 
@@ -81,7 +83,9 @@ network-test.sh script can be manually defined as well.  There are
 command line options for sequential mode and to run iperf as well.
 Run:
 
-    /root/cluster-validation/pre-install/network-test.sh | tee network-test.log
+    cd /root/cluster-validation/pre-install
+    ./network-test.sh | tee network-test.log
+
 on the node where clush has been installed and configured.
 Expect about 90% of peak bandwidth for either 1GbE or 10GbE
 networks:
@@ -95,7 +99,8 @@ Use the stream59 benchmark to test memory performance.  This test will take
 about a minute or so to run.  It can be executed in parallel on all
 the cluster nodes with the command:
 
-    clush -Ba '/root/cluster-validation/pre-install/memory-test.sh | grep ^Triad' | tee memory-test.log
+    cd /root/cluster-validation/pre-install
+    clush -Ba "$PWD/memory-test.sh | grep -e ^Func -e ^Triad" | tee memory-test.log
 
 System memory bandwidth is determined by speed of DIMMs, number of
 memory channels and to a lesser degree by CPU frequency.  Current
@@ -124,7 +129,9 @@ to run the destructive IOzone tests on all unused disks.
 
 The test can be run in parallel on all nodes with:
 
-    clush -ab /root/cluster-validation/pre-install/disk-test.sh
+    cd /root/cluster-validation/pre-install
+    clush -ab "$PWD/disk-test.sh"
+    clush -ab "$PWD/summIOzone.sh"
 
 Current generation (2012+) 7200 rpm SATA drives can produce 100-145
 MB/sec sequential read and write performance.  By default, the disk

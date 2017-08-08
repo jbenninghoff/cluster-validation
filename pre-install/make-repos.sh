@@ -27,17 +27,18 @@ clush -S -B -g all 'grep -i mapr /etc/yum.repos.d/*' && { echo MapR repos found;
 clush -S -B -g all 'grep -i -m1 epel /etc/yum.repos.d/*' || { echo Warning, EPEL repo not found; }
 
 #Create 4.x repos on all nodes
-cat <<EOF2 | clush -Nqb -g all "${SUDO:-} dd status=none of=/etc/yum.repos.d/maprtech.repo"
-[maprtech]
+#cat /etc/yum.repos.d/maprtech.repo
+cat <<EOF2 | clush -Nq -g all "${SUDO:-} dd status=none of=/etc/yum.repos.d/maprtech.repo"
+[mapr-core]
 name=MapR Technologies
-baseurl=http://package.mapr.com/releases/v4.1/redhat/
+baseurl=http://package.mapr.com/releases/v5.2.1/redhat/
 enabled=1
 gpgcheck=0
 protect=1
  
-[maprecosystem]
+[mapr-eco]
 name=MapR Technologies
-baseurl=http://package.mapr.com/releases/ecosystem-4.x/redhat/
+baseurl=http://package.mapr.com/releases/MEP/MEP-3.0/redhat/
 enabled=1
 gpgcheck=0
 protect=1

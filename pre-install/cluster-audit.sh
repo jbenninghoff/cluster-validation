@@ -18,6 +18,7 @@ The script requires that the clush utility (a parallel ssh tool)
 be installed and configured using passwordless ssh connectivity for root to
 all the nodes under test.  Or passwordless sudo for a non-root account.
 Use -l mapr for example if mapr account has passwordless sudo rights.
+
 EOF
 }
 
@@ -35,13 +36,15 @@ done
 
 # Set some global variables
 sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
-distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
+distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos -e sles) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 #distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 
 # Check for clush and provide alt if not found
 if type clush >& /dev/null; then
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
+   echo $sep
+   echo All the groups currently defined for clush:; $(nodeset -l); echo groups zk, cldb, rm, and hist should be defined for clush install
    echo $sep
    #clush specific arguments
    parg="${cluser} -b -g ${group:-all}"
@@ -90,7 +93,7 @@ fi
 # Check for systemd and basic RPMs
 sysd=$(clush $parg4 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
 case $distro in
-   redhat|centos|red*)
+   redhat|centos|red*|sles)
    if ! clush $parg $parg1 "rpm -q bind-utils pciutils dmidecode net-tools ethtool"; then
       echo RPMs required for audit not installed!
       echo "Install packages on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils dmidecode net-tools ethtool'"
@@ -144,13 +147,13 @@ echo $sep
 #/opt/MegaRAID/storcli/storcli64 /c0 /eall /sall show | awk '$3 == "UGood"{print $1}'; exit 
 #./MegaCli64 -cfgeachdskraid0 WT RA cached NoCachedBadBBU –strpsz256 -a0
 clush $parg "echo 'Storage Controller: '; ${SUDO:-} lspci | grep -i -e ide -e raid -e storage -e lsi"; echo $sep
-clush $parg "echo 'SCSI RAID devices in dmesg: '; dmesg | grep -i raid | grep -i -o 'scsi.*$' |uniq"; echo $sep
+clush $parg "echo 'SCSI RAID devices in dmesg: '; ${SUDO:-} dmesg | grep -i raid | grep -i -o 'scsi.*$' |uniq"; echo $sep
 case $distro in
    ubuntu)
    clush $parg "${SUDO:-} fdisk -l | grep '^Disk /.*:' |sort"; echo $sep
    ;;
-   redhat|centos|red*)
-   clush $parg "echo 'Block Devices: '; lsblk -id | awk '{print \$1,\$4}'|sort | nl"; echo $sep
+   redhat|centos|red*|sles)
+   clush $parg "echo 'Block Devices: '; lsblk -id -o NAME,SIZE,TYPE,MOUNTPOINT |grep -v ^sr0"; echo $sep
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
@@ -162,7 +165,7 @@ echo
 echo "#################### Linux audits ################################"
 #clush $parg "cat /etc/*release | uniq"; echo $sep
 clush $parg "[ -f /etc/system-release ] && cat /etc/system-release || cat /etc/os-release | uniq"; echo $sep
-clush $parg "uname -srvm | fmt"; echo $sep
+clush $parg "uname -a | fmt"; echo $sep
 clush $parg "echo Time Sync Check: ; date"; echo $sep
 
 case $distro in
@@ -176,10 +179,16 @@ case $distro in
       clush $parg "echo 'IPtables status: '; ${SUDO:-} iptables -L | head -10"; echo $sep
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
-   redhat|centos|red*)
-      clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
+   redhat|centos|red*|sles)
+      if [[ "$distro" != "sles" ]]; then
+         clush $parg 'echo "MapR Repos Check "; yum --noplugins repolist | grep -i mapr && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
+         #clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
+      else
+         clush $parg 'echo "MapR Repos Check "; zypper repos | grep -i mapr && zypper -q info mapr-core mapr-spark mapr-patch';echo $sep
+         #clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/zypp/repos.d/* |xargs -l grep -Hi baseurl && zypper -q info mapr-core mapr-spark mapr-patch';echo $sep
+      fi
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
-      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core ntp"
+      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core ntp" #TBD: SLES should have lsb5-core
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed"; echo $sep
       pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils lsof lvm2 iftop ntop iotop atop ftop htop ntpdate tree net-tools ethtool"
       clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
@@ -207,6 +216,7 @@ case $distro in
       esac
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
+      #clush $parg 'echo "MapR Repos Check "; zypper repos |grep -i mapr && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
 esac
 
 # See https://www.percona.com/blog/2014/04/28/oom-relation-vm-swappiness0-new-kernel/
@@ -236,11 +246,19 @@ clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwat
 
 echo Java Version
 clush $parg $parg2 'java -version || echo See java-post-install.sh'
-clush $parg $parg2 'yum list installed \*jdk\* \*java\*'
+if [[ "$distro" != "sles" ]]; then
+   clush $parg $parg2 'yum list installed \*jdk\* \*java\*'
+else
+   clush $parg $parg2 'zypper -i search java jdk'
+fi
 clush $parg $parg2 'javadir=$(dirname $(readlink -f /usr/bin/java)); test -x $javadir/jps || { test -x $javadir/../../bin/jps || echo JDK not installed; }'
 echo $sep
 echo Hostname IP addresses
-clush ${parg/-b /} 'hostname -I'; echo $sep
+if [[ "$distro" != "sles" ]]; then
+   clush ${parg/-b /} 'hostname -I'; echo $sep
+else
+   clush ${parg/-b /} 'hostname -i'; echo $sep
+fi
 echo DNS lookup
 clush ${parg/-b /} 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup

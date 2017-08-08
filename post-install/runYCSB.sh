@@ -74,7 +74,7 @@ ycsbdir=/home/mapr/ycsb-0.12.0
 ycsbargs="-s -P $wkld -threads $threads -p table=$table -p clientbuffering=$cbuff -p recordcount=$rows -p operationcount=$opcount -cp $(hbase classpath)"
 tmpdate=$(date '+%Y-%m-%dT%H+%M')
 teelog="ycsb-${threads}T-$thishost-$seq-$mag-${table//\//-}-$tmpdate"
-#export JAVA_CLASSPATH=$(hbase classpath) #YCSB insists on -cp 
+#export CLASSPATH=$(hbase classpath) #YCSB insists on -cp 
 
 [ -n "$DBG" ] && echo bin/ycsb run hbase10 $ycsbargs -p insertcount=$opcount -p insertstart=$istart  tee $teelog
 

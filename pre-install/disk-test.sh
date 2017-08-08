@@ -87,11 +87,23 @@ find_unused_disks() {
 
 ##############################################################################
 pgrep iozone && { echo 'iozone appears to be running, kill all iozones running (e.g. pkill iozone)'; exit; }
+
+#tar up previous log files
 files=$(ls *-{dd,iozone}.log 2>/dev/null)
-[ -n "$files" ] && { tar czf disk-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; } #tar up previous log files
+[ -n "$files" ] && { tar czf disk-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }
+
 find_unused_disks #Sets $disklist
 echo $disklist | tr ' ' '\n' >/tmp/disk.list #write disk list for MapR install
 [ -n "$DBG" ] && cat /tmp/disk.list
+[ -n "$DBG" ] && read -p "Press enter to continue or ctrl-c to abort"
+
+#Remove /dev/mapper duplicates from $disklist
+for i in $disklist; do
+   [[ "$i" =~ "/dev/mapper" ]] || continue
+   dupdev=$(lsblk | grep -B1 $(basename $i) |awk '/disk/{print "/dev/"$1}') #/dev/mapper underlying device
+   disklist=${disklist/$dupdev} #strip duplicate device used by mapper
+   [ -n "$DBG" ] && echo DiskList: $disklist
+done
 [ -n "$DBG" ] && read -p "Press enter to continue or ctrl-c to abort"
 
 case "$disks" in
@@ -112,12 +124,12 @@ case "$disks" in
       [ -n "$DBG" ] && set -x
       #read-only dd test, possible even after MFS is in place
       if [ $seq == "true" ]; then
-         for i in $disklist; do dd of=/dev/null if=$i iflag=direct bs=1M count=$[$size*1000] &> $(basename $i)-dd.log ; done
+         for i in $disklist; do dd of=/dev/null if=$i iflag=direct bs=1M count=$[$size*1000] |& tee $(basename $i)-seq-dd.log ; done
       else
          for i in $disklist; do dd of=/dev/null if=$i iflag=direct bs=1M count=$[$size*1000] &> $(basename $i)-dd.log & done
       fi
       [ $seq == "false" ] && { echo; echo "Waiting for dd to finish"; wait; sleep 3; echo; }
-      for i in $disklist; do echo $(basename $i)-dd.log; cat $(basename $i)-dd.log; echo; done
+      for i in $disklist; do grep -H MB/s $(basename $i)*-dd.log; done
       ;;
    destroy)
       echo

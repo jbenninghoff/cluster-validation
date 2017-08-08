@@ -36,8 +36,9 @@ done
 
 sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
 parg="-b -g ${group:-all}" 
-mrv=$(hadoop version |awk 'NR==1 {printf("%1.1s\n", $2)}')
 srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf || echo mapr) #guess at service acct if not found
+mrv=$(hadoop version |awk 'NR==1 {printf("%1.1s\n", $2)}')
+mrv=$(yarn rmadmin -getServiceState >& /dev/null && echo $mrv || echo 0)
 
 # Function definitions, overall function flow executed at end of script
 
@@ -57,10 +58,11 @@ maprcli_check() {
 cluster_checks1() {
    echo ==================== MapR audits ================================
    date; echo $sep
-   msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    if [ "$mrv" == "1" ] ; then # MRv1
+      msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} timeout 9 hadoop job -list; echo $sep
-   else
+   elif [ "$mrv" == "2" ] ; then # MRv2
+      msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} timeout 9 mapred job -list; echo $sep
    fi
    msg="MapR Dashboard "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
@@ -137,7 +139,7 @@ cluster_checks3() {
    clush $parg 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'; echo $sep
    clush $parg 'echo "MapR Disk List per Host"; maprcli disk list -output terse -system 0 -host $(hostname)'; echo $sep
    clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'; echo $sep
-   clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list '; echo $sep
+   #clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list '; echo $sep
    msg="MapR Complete Volume List "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    ${node:-} maprcli volume list -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
    msg="MapR Storage Pool Details "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
