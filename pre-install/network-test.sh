@@ -137,15 +137,15 @@ for node in "${half2[@]}"; do #Loop over all clients
     if [[ $runiperf == "true" ]]; then
       #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -w 16K > ${half1[$i]}---$node-iperf.log" & #16K window size MapR uses
       ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -P$xtra > ${half1[$i]}---$node-iperf.log" &  #increase -n value 10x for better test
-      clients="$clients $!" #catch this client PID
+      clients+=" $!" #catch this client PID
     else
       if [[ $multinic == "true" ]]; then
          ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log" &
-         clients="$clients $!" #catch this client PID
+         clients+=" $!" #catch this client PID
       else
          #increase $size value 10x for better test
          ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log" &
-         clients="$clients $!" #catch this client PID
+         clients+=" $!" #catch this client PID
          [[ $xtra -eq 4 ]] && { ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-2-rpctest.log" & clients="$clients $!"; }
          [[ -n "$DBG" ]] && ssh -n $node "pgrep -lf $rpctestbin"
          [[ -n "$DBG" ]] && { jobs -l; jobs -p; }

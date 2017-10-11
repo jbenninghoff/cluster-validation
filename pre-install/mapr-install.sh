@@ -297,8 +297,8 @@ clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/disksetup -F -W ${spwidth:-3}
 clush $clargs -g zk "${SUDO:-} service mapr-zookeeper start"
 clush $clargs -g clstr "${SUDO:-} service mapr-warden start"
 
-echo Waiting 2 minutes for system to initialize; end=$((SECONDS+120))
-sp='/-\|'; printf ' '; while [ $SECONDS -lt $end ]; do printf '\b%.1s' "$sp"; sp=${sp#?}${sp%???}; sleep .3; done # Spinner from StackOverflow
+echo Waiting 2 minutes for system to initialize; end=$(($SECONDS+120))
+sp='/-\|'; printf ' '; while (( $SECONDS < $end )); do printf '\b%.1s' "$sp"; sp=${sp#?}${sp%???}; sleep .3; done # Spinner from StackOverflow
 
 #TBD: Handle mapruid install
 #uid=$(id un)

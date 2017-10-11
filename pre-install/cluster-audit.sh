@@ -42,10 +42,7 @@ distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 
 # Check for clush and provide alt if not found
 if type clush >& /dev/null; then
-   [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; } && { echo NodeSet: $(nodeset -e @${group:-all}); }
-   echo $sep
-   echo All the groups currently defined for clush:; $(nodeset -l); echo groups zk, cldb, rm, and hist should be defined for clush install
-   echo $sep
+   [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
    #clush specific arguments
    parg="${cluser} -b -g ${group:-all}"
    parg1="-S"
@@ -54,14 +51,16 @@ if type clush >& /dev/null; then
    parg4="-qNS -g ${group:-all}"
    node=$(nodeset -I0 -e @${group:-all})
    narg="-w $node -o -qtt"
-   #echo Use: "(umask 0077 && sed -i -e '/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:a;n;ba;q}' -e '$aStrictHostKeyChecking no' $HOME/.ssh/config)" To remove ssh noise
-   #(umask 0077 && printf "ServerAliveInterval 99\nStrictHostKeyChecking no\nLogLevel ERROR\n" >> $HOME/.ssh/config)
+   (umask 0077 && sed -i -e '/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:z;n;bz}' -e '$aStrictHostKeyChecking no\nLogLevel ERROR' $HOME/.ssh/config)
+   echo To suppres ssh noise, $HOME/.ssh/config has been modified
+   #echo Use: "(umask 0077 && sed -i -e '/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:z;n;bz}' -e '$aStrictHostKeyChecking no' $HOME/.ssh/config)" To remove ssh noise, sed branch :z used to loop over n command
+   #(umask 0077 && printf "ServerAliveInterval 99\nStrictHostKeyChecking no\nLogLevel ERROR\n" >> $HOME/.ssh/config) && echo Modified ~/.ssh/config to remove ssh noise
    # Common arguments to pass in to clush execution
    #clcnt=$(nodeset -c @all)
    #parg="$parg -f $clcnt" #fanout set to cluster node count
    #parg="-o '-oLogLevel=ERROR' $parg"
 else
-   echo clush not found, doing a single node inspection without ssh
+   echo clush not found, doing a single node inspection without ssh; sleep 3
    clush() { eval "$@"; } #clush becomes no-op, all commands run locally doing a single node inspection
    #clush() { for h in $(<~/host.list); do; ssh $h $@; done; } #ssh in for loop
 fi
@@ -92,18 +91,21 @@ fi
 
 # Check for systemd and basic RPMs
 sysd=$(clush $parg4 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
+rpms="pciutils dmidecode net-tools ethtool "
 case $distro in
    redhat|centos|red*|sles)
-   if ! clush $parg $parg1 "rpm -q bind-utils pciutils dmidecode net-tools ethtool"; then
-      echo RPMs required for audit not installed!
-      echo "Install packages on all nodes with clush: clush -ab 'yum -y install bind-utils pciutils dmidecode net-tools ethtool'"
+   rpms+="bind-utils "
+   if ! clush $parg $parg1 "rpm -q $rpms >/dev/null"; then
+      echo Essential RPMs required for audit not installed!
+      echo "Install packages on all nodes with clush: clush -ab 'yum -y install $rpms'"
       exit
    fi
    ;;
    ubuntu)
-   if ! clush $parg $parg1 "dpkg -l bind9utils pciutils dmidecode net-tools ethtool"; then
-      echo Packages required for audit not installed!
-      echo "Install packages on all nodes with clush: clush -ab 'apt-get -y install bind9utils pciutils dmidecode net-tools ethtool'"
+   rpms+="bind9utils "
+   if ! clush $parg $parg1 "dpkg -l $rpms >/dev/null"; then
+      echo Essential packages required for audit not installed!
+      echo "Install packages on all nodes with clush: clush -ab 'apt-get -y install $rpms'"
       exit
    fi
    ;;
@@ -113,11 +115,14 @@ esac
 [ -n "$DBG" ] && exit
 
 
-echo;echo "#################### Hardware audits ################################"
+echo;echo "#################### Hardware audits ###############################"
 date; echo $sep
+echo NodeSet: $(nodeset -e @${group:-all}); echo $sep
+echo All the groups currently defined for clush:; echo $(nodeset -l)
+echo groups zk, cldb, rm, and hist needed for clush based install; echo $sep
 # probe for system info ###############
 clush $parg "echo DMI Sys Info:; ${SUDO:-} dmidecode | grep -A2 '^System Information'"; echo $sep
-clush $parg "echo DMI BIOS:; ${SUDO:-} dmidecode | grep -A3 '^BIOS I'"; echo $sep
+clush $parg "echo DMI BIOS:; ${SUDO:-} dmidecode |grep -A3 '^BIOS I'"; echo $sep
 
 # probe for cpu info ###############
 clush $parg "grep '^model name' /proc/cpuinfo | sort -u"; echo $sep
@@ -136,7 +141,8 @@ clush $parg "echo DIMM Details; ${SUDO:-} dmidecode -t memory | awk '/Memory Dev
 #clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed -e detected" 
 #clush $parg "ifconfig | awk '/^[^ ]/ && \$1 !~ /lo/{print \$1}' | xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
 clush $parg "${SUDO:-} lspci | grep -i ether"
-clush $parg ${SUDO:-} "ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l /sbin/ethtool | grep -e ^Settings -e Speed -e Link"
+clush $parg ${SUDO:-} "ip link show |sed '/ lo: /,+1d; /@.*:/,+1d' |awk '/UP/{sub(\":\",\"\",\$2);print \$2}' |xargs -l /sbin/ethtool |grep -e ^Settings -e Speed -e Link"
+#Above filters out lo and vnics using @interface labels
 #TBD: fix SUDO to find ethtool, not /sbin/ethtool
 #clush $parg "echo -n 'Nic Speed: '; /sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l -I % cat /sys/class/net/%/speed"
 echo $sep
@@ -153,7 +159,7 @@ case $distro in
    clush $parg "${SUDO:-} fdisk -l | grep '^Disk /.*:' |sort"; echo $sep
    ;;
    redhat|centos|red*|sles)
-   clush $parg "echo 'Block Devices: '; lsblk -id -o NAME,SIZE,TYPE,MOUNTPOINT |grep -v ^sr0"; echo $sep
+   clush $parg "echo 'Block Devices: '; lsblk -id -o NAME,SIZE,TYPE,MOUNTPOINT |grep -v ^sr0 |uniq -c -f1"; echo $sep
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
@@ -165,7 +171,8 @@ echo
 echo "#################### Linux audits ################################"
 #clush $parg "cat /etc/*release | uniq"; echo $sep
 clush $parg "[ -f /etc/system-release ] && cat /etc/system-release || cat /etc/os-release | uniq"; echo $sep
-clush $parg "uname -a | fmt"; echo $sep
+#clush $parg "uname -a | fmt"; echo $sep
+clush $parg "uname -srvmo | fmt"; echo $sep
 clush $parg "echo Time Sync Check: ; date"; echo $sep
 
 case $distro in
@@ -180,23 +187,27 @@ case $distro in
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
    redhat|centos|red*|sles)
-      if [[ "$distro" != "sles" ]]; then
-         clush $parg 'echo "MapR Repos Check "; yum --noplugins repolist | grep -i mapr && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
-         #clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
-      else
+      if [[ "$distro" == "sles" ]]; then
          clush $parg 'echo "MapR Repos Check "; zypper repos | grep -i mapr && zypper -q info mapr-core mapr-spark mapr-patch';echo $sep
          #clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/zypp/repos.d/* |xargs -l grep -Hi baseurl && zypper -q info mapr-core mapr-spark mapr-patch';echo $sep
+         clush $parg "echo -n 'SElinux status: '; rpm -q selinux-tools selinux-policy" ; echo $sep
+         clush $parg "${SUDO:-} service SuSEfirewall2_init status"; echo $sep
+      else
+         clush $parg 'echo "MapR Repos Check "; yum --noplugins repolist | grep -i mapr && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
+         #clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
+         clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; ${SUDO:-} getenforce" ; echo $sep
       fi
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
-      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core ntp" #TBD: SLES should have lsb5-core
-      clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required Installed"; echo $sep
+      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core ntp" #TBD: SLES should have lsb5-core 
+      clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required RPMS are Installed"; echo $sep
       pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils lsof lvm2 iftop ntop iotop atop ftop htop ntpdate tree net-tools ethtool"
       clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
-      clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; ${SUDO:-} getenforce" ; echo $sep
       #TBD suggest: setenforce Permissive and sed -i.bak 's/enforcing/permissive/' /etc/selinux/config
+      #TBD SElinux different for SLES
       case $sysd in
          true)
-            clush $parg "ntpstat | head -1" ; echo $sep
+            #clush $parg "ntpstat | head -1" ; echo $sep
+            clush $parg "echo NTPD Active:; ${SUDO:-} systemctl is-active ntpd" ; echo $sep
             clush $parg "${SUDO:-} systemctl list-dependencies iptables"; echo $sep
             clush $parg "${SUDO:-} systemctl status iptables"; echo $sep
             clush $parg "${SUDO:-} systemctl status firewalld"; echo $sep
@@ -224,7 +235,7 @@ clush $parg "echo 'Sysctl Values: '; ${SUDO:-} sysctl vm.swappiness net.ipv4.tcp
 echo -e "/etc/sysctl.conf values should be:\nvm.swappiness = 1\nnet.ipv4.tcp_retries2 = 5\nvm.overcommit_memory = 0"; echo $sep
 #clush $parg "grep AUTOCONF /etc/sysconfig/network" ; echo $sep
 clush $parg "echo -n 'Transparent Huge Pages: '; cat /sys/kernel/mm/transparent_hugepage/enabled" ; echo $sep
-clush $parg ${SUDO:-} 'echo Checking for LUKS; grep -v -e ^# -e ^$ /etc/crypttab'
+clush $parg ${SUDO:-} 'echo Checking for LUKS; grep -v -e ^# -e ^$ /etc/crypttab | uniq -c -f2'
 clush $parg 'echo "Disk Controller Max Transfer Size:"; files=$(ls /sys/block/{sd,xvd,vd}*/queue/max_hw_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done |uniq -c -f1'; echo $sep
 clush $parg 'echo "Disk Controller Configured Transfer Size:"; files=$(ls /sys/block/{sd,xvd,vd}*/queue/max_sectors_kb 2>/dev/null); for each in $files; do printf "%s: %s\n" $each $(cat $each); done |uniq -c -f1'; echo $sep
 echo Check Mounted FS
@@ -249,7 +260,7 @@ clush $parg $parg2 'java -version || echo See java-post-install.sh'
 if [[ "$distro" != "sles" ]]; then
    clush $parg $parg2 'yum list installed \*jdk\* \*java\*'
 else
-   clush $parg $parg2 'zypper -i search java jdk'
+   clush $parg $parg2 'zypper search -i java jdk'
 fi
 clush $parg $parg2 'javadir=$(dirname $(readlink -f /usr/bin/java)); test -x $javadir/jps || { test -x $javadir/../../bin/jps || echo JDK not installed; }'
 echo $sep
@@ -263,8 +274,6 @@ echo DNS lookup
 clush ${parg/-b /} 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup
 clush ${parg/-b /} 'host $(hostname -i)'; echo $sep
-echo Check for system wide nproc and nofile limits
-clush $parg "${SUDO:-} grep -e nproc -e nofile /etc/security/limits.d/*.conf /etc/security/limits.conf |grep -v ':#' "; echo $sep
 echo Check for root ownership of /opt/mapr  
 clush $parg $parg2 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'; echo $sep
 echo "Check for $serviceacct login"
@@ -292,5 +301,8 @@ elif [[ $(id -un) == $serviceacct ]]; then
 else
    echo Must have root access or sudo rights to check $serviceacct limits
 fi
+echo Check for system wide nproc and nofile limits
+clush $parg "${SUDO:-} [[ -d /etc/security/limits.d ]] && { grep -e nproc -e nofile /etc/security/limits.d/*.conf |grep -v ':#'; } || exit 0"
+clush $parg "${SUDO:-} grep -e nproc -e nofile /etc/security/limits.conf |grep -v ':#' "; echo $sep
 #echo 'Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)'
 #clush $parg "echo 'Root login '; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }"; echo $sep
