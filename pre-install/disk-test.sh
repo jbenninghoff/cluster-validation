@@ -69,6 +69,7 @@ find_unused_disks() {
          grep $dev /opt/mapr/conf/disktab &>/dev/null && continue #Looks like part of MapR disk set already
          lsof $dev && continue #Looks like something has device open
       fi
+      cryptsetup isLuks $dev && continue #device is part of encrypted partition
       disklist="$disklist $dev" #Survived all filters, add device to the list of unused disks
    done
 
