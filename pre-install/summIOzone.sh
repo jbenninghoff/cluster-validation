@@ -3,7 +3,7 @@
 # script which summarizes iozone results on a set of disks
 # iozone results presumed to be in current folder in .log files
 # updated to work with AWS
-
+# 20171020 R.Itäpuro initialize svals variable to get correct CV values
 files=$(ls *-iozone.log 2>/dev/null)
 [ -n "$files" ] || { echo No iozone.log files found; exit 1; }
 
@@ -44,6 +44,7 @@ cat *-iozone.log | gawk '
      printf "%-7s %6d\n", "mean:", swavg
      printf "%-7s %6d\n", "min:", swmin
      printf "%-7s %6d\n", "max:", swmax
+     svals = 0
      for (val in swvals) {
        svals += (swvals[val] - swavg) ** 2
      }
@@ -57,6 +58,7 @@ cat *-iozone.log | gawk '
      printf "%-7s %6d\n", "mean:", sravg
      printf "%-7s %6d\n", "min:", srmin
      printf "%-7s %6d\n", "max:", srmax
+     svals = 0
      for (val in srvals) {
        svals += (srvals[val] - sravg) ** 2
      }
@@ -70,6 +72,7 @@ cat *-iozone.log | gawk '
      printf "%-7s %6d\n", "mean:", rwavg
      printf "%-7s %6d\n", "min:", rwmin
      printf "%-7s %6d\n", "max:", rwmax
+     svals = 0
      for (val in rwvals) {
        svals += (rwvals[val] - rwavg) ** 2
      }
@@ -83,6 +86,7 @@ cat *-iozone.log | gawk '
      printf "%-7s %6d\n", "mean:", rravg
      printf "%-7s %6d\n", "min:", rrmin
      printf "%-7s %6d\n", "max:", rrmax
+     svals = 0
      for (val in rrvals) {
        svals += (rrvals[val] - rravg) ** 2
      }
