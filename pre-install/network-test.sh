@@ -11,27 +11,29 @@ The throughput between each pair of nodes is reported.  When run
 concurrently (the default case), load is also applied to the network
 switch(s).
 
-Use -m option to run tests on multiple server NICs
 Use -s option to run tests in seqential mode
 Use -c option to run MapR rpctest instead of iperf
 Use -x option to run 4 flows/streams from each client to measure bonding/teaming NICs
+Use -X option to run 2 processes on servers and clients to measure bonding/teaming NICs
 Use -z option to specify size of test in MB (default=5000)
 Use -r option to specify reverse sort order of IP addresses, good check for firewall blockage
 Use -R option to specify random sort order of IP addresses, good check for firewall blockage
 Use -g option to specify a clush group (default is group all)
+Use -m option to run tests on multiple server NIC IP addresses
 Use -d option to enable debug output
 
 EOF
 }
 
-concurrent=true; runiperf=true; multinic=false; size=5000; sortopt=''; DBG=''; xtra=1; group=all
-while getopts "xdscmrRg:z:" opt; do
+concurrent=true; runiperf=true; multinic=false; size=5000; sortopt=''; DBG=''; xtra=1; group=all; procs=1
+while getopts "xXdscmrRg:z:" opt; do
   case $opt in
     d) DBG=true ;;
     g) group=$OPTARG ;;
     s) concurrent=false ;;
     c) runiperf=false ;;
     x) xtra=4 ;;
+    X) procs=2 ;;
     m) multinic=true ;;
     r) sortopt="-$opt" ;; #Reverse order
     R) sortopt="-$opt" ;; #Random order
@@ -46,6 +48,11 @@ iperfbin=iperf3 #Installed iperf3 {uses same options}
 iperfbin=$scriptdir/iperf #Packaged version
 rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
 rpctestbin=$scriptdir/rpctest #Packaged version
+port2=5002
+#Uncomment next 3 vars to enable NUMA taskset, check nodes with numactl -H
+#numanode0="0-13,28-41"
+#numanode1="14-27,42-55"
+#taskset="taskset -c "
 #tmpfile=$(mktemp); trap "rm $tmpfile; echo EXIT sigspec: $?; exit" EXIT
 #ssh() { /usr/bin/ssh -l root $@; }
 
@@ -115,13 +122,15 @@ fi
 
 for node in "${half1[@]}"; do
   if [[ $runiperf == "true" ]]; then
-     ssh -n $node "$iperfbin -s > /dev/null" &  # iperf alternative test, requires iperf binary on all nodes
+     ssh -n $node "$taskset $numanode0 $iperfbin -s -P$xtra > /dev/null" &  
+     [[ $procs -gt 1 ]] && ssh -n $node "$taskset $numanode1 $iperfbin -s -P$xtra -p $port2 > /dev/null" & 
   else
      ssh -n $node $rpctestbin -server &
   fi
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
 echo ${#half1[@]} Servers have been launched
+[[ $procs -gt 1 ]] && echo $procs processes per server launched
 sleep 5 # let the servers stabilize
 [[ -n "$DBG" ]] && read -p "$DBG: Press enter to continue or ctrl-c to abort"
 
@@ -136,8 +145,11 @@ for node in "${half2[@]}"; do #Loop over all clients
   if [[ $concurrent == "true" ]]; then
     if [[ $runiperf == "true" ]]; then
       #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -w 16K > ${half1[$i]}---$node-iperf.log" & #16K window size MapR uses
-      ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -P$xtra > ${half1[$i]}---$node-iperf.log" &  #increase -n value 10x for better test
+      #ssh -n $node "$taskset $numanode0 $iperfbin -c ${half1[$i]} -n ${size}M -P$xtra > ${half1[$i]}---$node-iperf.log" &  #increase -n value 10x for better test
+      ssh -n $node "$taskset $numanode0 $iperfbin -c ${half1[$i]} -t 30 -P$xtra > ${half1[$i]}---$node-iperf.log" &  #increase -n value 10x for better test
       clients+=" $!" #catch this client PID
+      #[[ $procs -gt 1 ]] && ssh -n $node "$taskset $numanode1 $iperfbin -c ${half1[$i]} -n ${size}M -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" &
+      [[ $procs -gt 1 ]] && { ssh -n $node "$taskset $numanode1 $iperfbin -c ${half1[$i]} -t 30 -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" & clients+=" $!"; }
     else
       if [[ $multinic == "true" ]]; then
          ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log" &
@@ -154,7 +166,8 @@ for node in "${half2[@]}"; do #Loop over all clients
      [[ -n "$DBG" ]] && echo clients: "$clients $!"
   else #Sequential mode can be used to help isolate NIC and cable issues
     if [[ $runiperf == "true" ]]; then
-      ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -i3 -P$xtra > ${half1[$i]}---$node-iperf.log" #use 10x -n value for better test
+      [[ $procs -gt 1 ]] && ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" &
+      ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -P$xtra > ${half1[$i]}---$node-iperf.log" #use 10x -n value for better test
     else
       if [[ $multinic == "true" ]]; then
         ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log"
@@ -172,6 +185,7 @@ for node in "${half2[@]}"; do #Loop over all clients
 done
 
 [[ $concurrent == "true" ]] && echo ${#half2[@]} Clients have been launched
+[[ $concurrent == "true" && $procs -gt 1 ]] && echo $procs processes per client launched
 [[ $concurrent == "true" ]] && { echo Waiting for client PIDS: $clients; wait $clients; } #Wait for all clients to finish in concurrent run
 echo Wait over, post processing
 sleep 3
@@ -182,6 +196,7 @@ if [[ -n "$extraip" ]]; then
    echo Measuring extra IP address
    ((i--)) #decrement to reuse last server in server list $half1
    if [[ $runiperf == "true" ]]; then
+      [[ $procs -gt 1 ]] && ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -i3 -P$xtra -p $port2 > ${half1[$i]}---$extraip-$port2-iperf.log" &
       ssh -n $extraip "$iperfbin -c ${half1[$i]} -n ${size}M -i3 -P$xtra > ${half1[$i]}---$extraip-iperf.log" #Small initial test, increase size for better test
    else
       ssh -n $extraip "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$extraip-rpctest.log"
