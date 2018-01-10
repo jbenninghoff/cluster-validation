@@ -28,9 +28,11 @@ For example;
     all: node[0-10]
 
 Verify clush works correctly by running:
+
     "clush -a date"
 
 Compare results with:
+
     "clush -ab date"
 
 Complete documentation for clush and clustershell can be found here:
