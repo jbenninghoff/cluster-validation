@@ -29,11 +29,11 @@ For example;
 
 Verify clush works correctly by running:
 
-    "clush -a date"
+    clush -a date
 
 Compare results with:
 
-    "clush -ab date"
+    clush -ab date
 
 Complete documentation for clush and clustershell can be found here:
 http://clustershell.readthedocs.org/en/latest/tools/clush.html
