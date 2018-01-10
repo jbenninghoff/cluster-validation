@@ -26,8 +26,10 @@ host names in your cluster.
 For example;
 
     all: node[0-10]
+
 Verify clush works correctly by running:
     "clush -a date"
+
 Compare results with:
     "clush -ab date"
 
@@ -39,7 +41,7 @@ If you don't find clustershell in EPEL, you may be able to download rpm here:
 
 Next, download and extract the cluster-validation package with a command like this:
 
-    curl -L -o cluster-validation.tgz http://github.com/jbenninghoff/cluster-validation/tarball/master
+    curl -L -o cluster-validation.tgz http://github.com/MapRPS/cluster-validation/tarball/master
 Extract with tar in /root or your home folder and rename the top level folder like this:  
 
     mv jbenninghoff-cluster-validation-* cluster-validation
@@ -54,11 +56,11 @@ clush command simplifies this:
 
 Step 1 : Gather Base Audit Information
 --------------------------------------
-Use cluster-audit.sh to verify that you have met the MapR installation
-requirements.  Run:
+Run cluster-audit.sh as root to verify that all nodes have met the
+MapR installation requirements.  Run:
 
-    cd /root/cluster-validation/pre-install
-    ./cluster-audit.sh | tee cluster-audit.log
+    cd /root/cluster-validation/
+    pre-install/cluster-audit.sh | tee cluster-audit.log
 
 on the node where clush has been installed and configured to access
 all cluster nodes.  Examine the log for inconsistency among any nodes.  
@@ -83,8 +85,8 @@ network-test.sh script can be manually defined as well.  There are
 command line options for sequential mode and to run iperf as well.
 Run:
 
-    cd /root/cluster-validation/pre-install
-    ./network-test.sh | tee network-test.log
+    cd /root/cluster-validation/
+    pre-install/network-test.sh | tee network-test.log
 
 on the node where clush has been installed and configured.
 Expect about 90% of peak bandwidth for either 1GbE or 10GbE
@@ -99,8 +101,8 @@ Use the stream59 benchmark to test memory performance.  This test will take
 about a minute or so to run.  It can be executed in parallel on all
 the cluster nodes with the command:
 
-    cd /root/cluster-validation/pre-install
-    clush -Ba "$PWD/memory-test.sh | grep -e ^Func -e ^Triad" | tee memory-test.log
+    cd /root/cluster-validation/
+    clush -Ba "$PWD/pre-install/memory-test.sh | grep -e ^Func -e ^Triad" | tee memory-test.log
 
 System memory bandwidth is determined by speed of DIMMs, number of
 memory channels and to a lesser degree by CPU frequency.  Current
@@ -129,15 +131,17 @@ to run the destructive IOzone tests on all unused disks.
 
 The test can be run in parallel on all nodes with:
 
-    cd /root/cluster-validation/pre-install
-    clush -ab "$PWD/disk-test.sh"
-    clush -ab "$PWD/summIOzone.sh"
+    cd /root/cluster-validation/
+    clush -ab "$PWD/pre-install/disk-test.sh"
+    clush -ab "$PWD/pre-install/summIOzone.sh"
 
-Current generation (2012+) 7200 rpm SATA drives can produce 100-145
-MB/sec sequential read and write performance.  By default, the disk
-test only uses a 4GB data set size in order to finish quickly.
-Consider using an additional larger size to measure disk throughput
-more thoroughly.  This will typically require hours to run which
+Current generation (2012+) 7200 rpm SATA drives can report 100-150MB/sec
+sequential read and write throughput.  SAS, SSD and NVMe drives can
+report from 200MB/sec to nearly 2GB/sec for NVMe drives as measured
+by sequential iozone or fio tests on the raw device.  By default,
+the disk test only uses a 4GB data set size in order to finish
+quickly.  Consider using a larger size to measure disk throughput
+more thoroughly.  Doing so will typically require hours to run which
 could be done overnight if your schedule allows.  For large numbers
 of nodes and disks there is a summIOzone.sh script that can help
 provide a summary of disk-test.sh output using clush.
@@ -146,10 +150,11 @@ provide a summary of disk-test.sh output using clush.
 
 Complete Pre-Installation Checks
 --------------------------------
-When all subsystem tests have passed and met expectations,
-there is an example install script in the pre-install folder that
-can be modified and used for a scripted install.  Otherwise, follow
-the instructions from the http://doc.mapr.com web site for cluster installation.
+When all subsystem tests have passed and met expectations, there
+is an example install script in the pre-install folder that can be
+modified and used for a scripted install by experienced users.
+Otherwise, follow the instructions from the http://doc.mapr.com web
+site for cluster installation.
 
 Post Installation tests
 --------------------------------
@@ -172,7 +177,8 @@ can be run to provide an audit log of the MapR configuration.  The
 script contains a useful set of example maprcli commands. There are
 also example install, upgrade and un-install options to mapr-install.sh
 that leverage clush to run quickly on an entire set of nodes or
-cluster.  Many scripts will not run without editing, so read the scripts
-carefully to understand how to edit them with site specific info.
+cluster.  Many scripts will not run without editing, so read the
+scripts carefully to understand how to edit them with site specific
+info.  All scripts support the -h option to show help on usage.
 
 /John Benninghoff

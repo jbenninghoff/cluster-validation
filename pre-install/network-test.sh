@@ -166,8 +166,8 @@ for node in "${half2[@]}"; do #Loop over all clients
      [[ -n "$DBG" ]] && echo clients: "$clients $!"
   else #Sequential mode can be used to help isolate NIC and cable issues
     if [[ $runiperf == "true" ]]; then
-      [[ $procs -gt 1 ]] && ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" &
-      ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -P$xtra > ${half1[$i]}---$node-iperf.log" #use 10x -n value for better test
+      [[ $procs -gt 1 ]] && ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" &
+      ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -P$xtra > ${half1[$i]}---$node-iperf.log" #use 10x -n value for better test
     else
       if [[ $multinic == "true" ]]; then
         ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log"
@@ -176,9 +176,10 @@ for node in "${half2[@]}"; do #Loop over all clients
         ssh -n $node "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$node-rpctest.log"
       fi
     fi
-    ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ethtool | grep -e ^Settings -e Speed: "
-    ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ifconfig | grep -e HWaddr -e errors -e 'inet addr:' "
-    echo
+    echo Test from $node to ${half1[$i]} done
+    tail ${half1[$i]}---$node-iperf.log
+    ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ethtool | grep -e ^Settings -e Speed: >> ${half1[$i]}---$node-iperf.log"
+    ssh $node "arp -na | awk '{print \$NF}' | sort -u | xargs -l ifconfig | grep -e HWaddr -e errors -e 'inet addr:' >> ${half1[$i]}---$node-iperf.log"
   fi
   ((i++))
   #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
@@ -196,8 +197,8 @@ if [[ -n "$extraip" ]]; then
    echo Measuring extra IP address
    ((i--)) #decrement to reuse last server in server list $half1
    if [[ $runiperf == "true" ]]; then
-      [[ $procs -gt 1 ]] && ssh -n $node "$iperfbin -c ${half1[$i]} -n ${size}M -i3 -P$xtra -p $port2 > ${half1[$i]}---$extraip-$port2-iperf.log" &
-      ssh -n $extraip "$iperfbin -c ${half1[$i]} -n ${size}M -i3 -P$xtra > ${half1[$i]}---$extraip-iperf.log" #Small initial test, increase size for better test
+      [[ $procs -gt 1 ]] && ssh -n $node "$iperfbin -c ${half1[$i]} -t30 -i3 -P$xtra -p $port2 > ${half1[$i]}---$extraip-$port2-iperf.log" &
+      ssh -n $extraip "$iperfbin -c ${half1[$i]} -t30 -i3 -P$xtra > ${half1[$i]}---$extraip-iperf.log" #Small initial test, increase size for better test
    else
       ssh -n $extraip "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$extraip-rpctest.log"
    fi

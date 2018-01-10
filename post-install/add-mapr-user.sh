@@ -8,49 +8,62 @@ usage() {
   echo optional uid will be checked for availability and used if available
   exit 1
 }
-[ $# -gt 0 ] || usage
-getent passwd $1| awk -F: '{print $1}' | grep "^$1$" && { echo $1 is in use already; exit 1; }
-if [ $# -gt 1 ]; then
-  getent passwd $2 && { echo $2 is in use already; exit 1; }
-  getent group $2 && { echo $2 is in use already; exit 1; }
-  adduid="-u $2"
-  addgid="-g $2"
-fi
+[[ $# -lt 1 ]] && usage
+[[ $(id -u) -ne 0 ]] && { echo This script must be run as root; exit 1; }
+type clush >& /dev/null || { echo clush required for this script; exit 2; }
 
-# add group
-groupadd $addgid $1
-# add user
-useradd -m -c 'MapR user account' -g $1 $adduid $1
-# set password for user
-echo -e "password\npassword" | passwd $1
-# Generate keys?
-# Set secondary group membership as needed
-# usermod -G wheel,project1 $1
-# Get uid/gid
-uid=$(getent passwd $1| awk -F: '{print $3}')
-gid=$(getent group $1| awk -F: '{print $3}')
-printf "UID: $uid\n"
-printf "GID: $gid\n"
-
-# Check if current host in clush group all
+pw=${3:-password}
+# Check if current host in clush group all and define exception
 nodeset -e @all | grep $(hostname -s) && xprimenode="-x $(hostname -s)"
 
-# Check for existing user name, uid and gid
-clush -S -b -g all $xprimenode "getent passwd $1" && { echo $1 is in use already; exit 1; }
-clush -S -b -g all $xprimenode "getent passwd $uid" && { echo $uid in use already; exit 1; }
-clush -S -b -g all $xprimenode "getent passwd $gid" && { echo $gid in use already; exit 1; }
+# Check for existing uid and gid
+if [[ $# -gt 1 ]]; then
+   clush -S -b -g all $xprimenode "getent passwd $2" && { echo $2 is in use already; exit 1; }
+   clush -S -b -g all $xprimenode "getent group $2" && { echo $2 in use already; exit 1; }
+   adduid="-u $2"
+   addgid="-g $2"
+fi
 
-# Create group on all nodes
-clush -b -g all $xprimenode "groupadd $addgid $1"
-# Create user on all nodes
-clush -b -g all $xprimenode "useradd -m -c 'MapR user account' -g $1 $adduid $1"
-# Set password for user on all nodes
-clush -b -g all $xprimenode "echo -e 'password\npassword' | passwd $1"
-# Set secondary group membership as needed
-# clush -b -g all $xprimenode usermod -G wheel,project1 $1
-# Verify consistent id
-clush -b -g all "id $1"
+# Create new Linux user on all cluster nodes
+prep-linux-user() {
+   groupadd $addgid $1
+   useradd -m -c 'MapR user account' -g $1 $adduid $1
+   # set password for user
+   echo -e "$pw\n$pw" | passwd $1
+   # Get system generated uid/gid
+   uid=$(getent passwd $1| awk -F: '{print $3}')
+   gid=$(getent group $1| awk -F: '{print $3}')
+   adduid="-g $uid"; printf "UID: $uid\n"
+   addgid="-g $gid"; printf "GID: $gid\n"
 
-hadoop fs -mkdir /user/$1
-hadoop fs -chown $1:$1 /user/$1
+   # Create group on all nodes
+   clush -b -g all $xprimenode "groupadd $addgid $1"
+   # Create user on all nodes
+   clush -b -g all $xprimenode "useradd -m -c 'MapR user account' -g $1 $adduid $1"
+   # Set password for user on all nodes
+   clush -b -g all $xprimenode "echo -e '$pw\n$pw' | passwd $1"
+   # Set secondary group membership as needed, modify and uncomment
+   # clush -b -g all $xprimenode usermod -G wheel,project1 $1
+   # Verify consistent id
+   clush -b -g all "id $1"
+done
+
+# Set up MapR folder and proxy for the specified user
+prep-mapr-user() {
+   clush -a touch /opt/mapr/conf/proxy/$1
+   clush -a chown mapr:mapr /opt/mapr/conf/proxy/$1
+   #TBD: run as mapr and define ticket location
+   hadoop fs -mkdir /user/$1
+   hadoop fs -chown $1:$1 /user/$1
+}
+
+if getent passwd $1; do
+   echo $1 is in use already
+   clush -b -g all "id $1"
+   echo Adding $1 to MapR cluster
+   prep-mapr-user
+else
+   prep-linux-user
+   prep-mapr-user
+done
 
