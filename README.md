@@ -1,12 +1,13 @@
 Cluster Validation
 ==================
 
-Before installing MapR Hadoop it is invaluable to validate the hardware and
-software that MapR will be dependent on.  Doing so will verify that items like
-disks and DIMMs are performing as expected and with a known benchmark metric.
-Doing so will also verify that many of the basic OS configurations and
-packages are in the required state and that state is also recorded in the
-output log.
+Before installing MapR Hadoop it is invaluable to validate the
+hardware and software that MapR will be dependent on.  Doing so
+will verify that items like disks and DIMMs are performing as
+expected and with a known benchmark metric.  Doing so will also
+verify that many of the basic OS configurations and packages are
+in the required state and that state is also recorded in the output
+log.
 
 Please use the steps below to test CPU/RAM, disk, and networking
 performance as well as to verify that your cluster meets MapR
