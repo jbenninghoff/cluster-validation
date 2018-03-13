@@ -34,11 +34,11 @@ while getopts ":dvtsea:g:" opt; do
    esac
 done
 
-sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
+sep=$(printf %80s); sep="${sep// /#}" #Substitute all blanks with ######
 parg="-b -g ${group:-all}" 
-srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf || echo mapr) #guess at service acct if not found
-mrv=$(hadoop version |awk 'NR==1 {printf("%1.1s\n", $2)}')
-mrv=$(yarn rmadmin -getServiceState >& /dev/null && echo $mrv || echo 0)
+srvid=$(awk -F= "/mapr.daemon.user/ {print \$2}" /opt/mapr/conf/daemon.conf || echo mapr) #guess at service acct if not found
+mrv=$(hadoop version |awk "NR==1 {printf("%1.1s\n", \$2)}")
+mrv=$( yarn rmadmin -getServiceState >& /dev/null && echo $mrv || echo 0; )
 
 # Function definitions, overall function flow executed at end of script
 

@@ -72,7 +72,7 @@ fi
 [ $[$opcount / (1000*1000*1000)] -gt 0 ] && mag=$[$opcount / (1000*1000*1000)]B
 ycsbdir=/home/mapr/ycsb-0.12.0
 ycsbargs="-s -P $wkld -threads $threads -p table=$table -p clientbuffering=$cbuff -p recordcount=$rows -p operationcount=$opcount -cp $(hbase classpath)"
-tmpdate=$(date '+%Y-%m-%dT%H+%M')
+tmpdate=$(date "+%FT%T")
 teelog="ycsb-${threads}T-$thishost-$seq-$mag-${table//\//-}-$tmpdate"
 #export CLASSPATH=$(hbase classpath) #YCSB insists on -cp 
 

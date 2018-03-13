@@ -35,26 +35,32 @@ done
 [ -n "$DBG" ] && set -x
 
 # Set some global variables
-sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
-distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos -e sles) || distro=centos
-distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
+printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
+#eval printf -v "'#%.0s'" {1..${COLUMNS:-80}}
+linuxs="-e ubuntu -e redhat -e 'red hat' -e centos -e sles"
+distro=$(cat /etc/*release |& grep -m1 -i -o "$linuxs") || distro=centos
+distro=${distro,,} #make lowercase
 #distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 
 # Check for clush and provide alt if not found
 if type clush >& /dev/null; then
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
    #clush specific arguments
-   parg="${cluser} -b -g ${group:-all}"
+   parg="${cluser} -q -b -g ${group:-all}"
    parg1="-S"
    parg2="-B"
    parg3="-u 30"
    parg4="-qNS -g ${group:-all}"
    node=$(nodeset -I0 -e @${group:-all})
    narg="-w $node -o -qtt"
-   (umask 0077 && sed -i -e '/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:z;n;bz}' -e '$aStrictHostKeyChecking no\nLogLevel ERROR' $HOME/.ssh/config)
-   echo To suppres ssh noise, $HOME/.ssh/config has been modified
-   #echo Use: "(umask 0077 && sed -i -e '/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:z;n;bz}' -e '$aStrictHostKeyChecking no' $HOME/.ssh/config)" To remove ssh noise, sed branch :z used to loop over n command
-   #(umask 0077 && printf "ServerAliveInterval 99\nStrictHostKeyChecking no\nLogLevel ERROR\n" >> $HOME/.ssh/config) && echo Modified ~/.ssh/config to remove ssh noise
+   sshcnf=$HOME/.ssh/config
+   [[ ! -f $sshcnf ]] && { touch $sshcnf; chmod 600 $sshcnf; }
+   e1='/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:z;n;bz}'
+   e2='$aStrictHostKeyChecking no\nLogLevel ERROR'
+   sed -i.bak -e "$e1" -e "$e2" $sshcnf
+   if ! diff $sshcnf $sshcnf.bak >/dev/null; then
+      echo To suppress ssh noise, $sshcnf has been modified
+   fi
    # Common arguments to pass in to clush execution
    #clcnt=$(nodeset -c @all)
    #parg="$parg -f $clcnt" #fanout set to cluster node count
@@ -67,11 +73,11 @@ fi
 [ -n "$DBG" ] && { clush $parg $parg1 ${parg3/0 /} date || { echo clush failed; usage; exit 3; }; }
 
 # Locate or guess MapR Service Account
-if [ -f /opt/mapr/conf/daemon.conf ]; then
-   serviceacct=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
-   [ -z "$serviceacct" ] && serviceacct=mapr #guess
+if [[ -f /opt/mapr/conf/daemon.conf ]]; then
+   srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
+   [[ -z "$srvid" ]] && srvid=mapr #guess
 else
-   serviceacct=mapr #guess
+   srvid=mapr #guess at service acct if not found
 fi
 
 # Define Sudo options if available
@@ -111,7 +117,7 @@ case $distro in
    ;;
 esac
 
-[ -n "$DBG" ] && { echo sysd: $sysd; echo serviceacct: $serviceacct; echo SUDO: $SUDO; echo parg: $parg; echo node: $node; }
+[ -n "$DBG" ] && { echo sysd: $sysd; echo srvid: $srvid; echo SUDO: $SUDO; echo parg: $parg; echo node: $node; }
 [ -n "$DBG" ] && exit
 
 
@@ -159,7 +165,7 @@ case $distro in
    clush $parg "${SUDO:-} fdisk -l | grep '^Disk /.*:' |sort"; echo $sep
    ;;
    redhat|centos|red*|sles)
-   clush $parg "echo 'Block Devices: '; lsblk -id -o NAME,SIZE,TYPE,MOUNTPOINT |grep -v ^sr0 |uniq -c -f1"; echo $sep
+   clush $parg "echo 'Block Devices: '; lsblk -id -o NAME,SIZE,TYPE,MOUNTPOINT |grep -v ^sr0 |uniq -c -f1 |sed '1s/  1/Qty/'"; echo $sep
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
@@ -197,18 +203,25 @@ case $distro in
          #clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
          clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; ${SUDO:-} getenforce" ; echo $sep
       fi
-      clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort' ; echo $sep
-      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind nfs-utils redhat-lsb-core ntp" #TBD: SLES should have lsb5-core 
+      clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort'
+      echo $sep
+      pkgs="dmidecode bind-utils irqbalance syslinux hdparm sdparm rpcbind"
+      pkgs+=" nfs-utils redhat-lsb-core ntp" #TBD: SLES should have lsb5-core 
       clush $parg "echo Required RPMs: ; rpm -q $pkgs | grep 'is not installed' || echo All Required RPMS are Installed"; echo $sep
-      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server tuned smartmontools pciutils lsof lvm2 iftop ntop iotop atop ftop htop ntpdate tree net-tools ethtool"
-      clush $parg "echo Optional  RPMs: ; rpm -q $pkgs | grep 'is not installed' |sort" ; echo $sep
+      pkgs="patch nc dstat xml2 jq git tmux zsh vim nmap mysql mysql-server"
+      pkgs+=" tuned smartmontools pciutils lsof lvm2 iftop ntop iotop atop"
+      pkgs+=" ftop htop ntpdate tree net-tools ethtool"
+      clush $parg "echo Optional RPMs:; rpm -q $pkgs |grep 'not installed' |sort" 
+      echo $sep
       #TBD suggest: setenforce Permissive and sed -i.bak 's/enforcing/permissive/' /etc/selinux/config
       #TBD SElinux different for SLES
       case $sysd in
          true)
             #clush $parg "ntpstat | head -1" ; echo $sep
-            clush $parg "echo NTPD Active:; ${SUDO:-} systemctl is-active ntpd" ; echo $sep
-            clush $parg "${SUDO:-} systemctl list-dependencies iptables"; echo $sep
+            clush $parg "echo NTPD Active:; ${SUDO:-} systemctl is-active ntpd"
+            echo $sep
+            clush $parg "${SUDO:-} systemctl list-dependencies iptables"
+            echo $sep
             clush $parg "${SUDO:-} systemctl status iptables"; echo $sep
             clush $parg "${SUDO:-} systemctl status firewalld"; echo $sep
             clush $parg "${SUDO:-} systemctl status cpuspeed"; echo $sep
@@ -276,30 +289,30 @@ echo Reverse DNS lookup
 clush ${parg/-b /} 'host $(hostname -i)'; echo $sep
 echo Check for root ownership of /opt/mapr  
 clush $parg $parg2 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'; echo $sep
-echo "Check for $serviceacct login"
-clush $parg $parg1 "echo '$serviceacct account for MapR Hadoop '; getent passwd $serviceacct" || { echo "$serviceacct user NOT found!"; exit 2; }
+echo "Check for $srvid login"
+clush $parg $parg1 "echo '$srvid account for MapR Hadoop '; getent passwd $srvid" || { echo "$srvid user NOT found!"; exit 2; }
 echo $sep
 
 if [[ $(id -u) -eq 0 || "$parg" =~ root || "$SUDO" =~ sudo ]]; then
    #TBD check umask for root and mapr
-   echo Check for $serviceacct user specific open file and process limits
-   clush $parg "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -u'"
-   clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $serviceacct -c 'ulimit -n'"; echo $sep
-   echo Check for $serviceacct users java exec permission and version
-   clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $serviceacct -c 'java -version'"; echo $sep
-   clush $parg $parg2 "echo -n 'Locale setting(must be en_US): '; ${SUDO:-} su - $serviceacct -c 'locale |grep LANG'"; echo $sep
-   echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
-   clush $parg "${SUDO:-} ls ~$serviceacct/.ssh/authorized_keys"; echo $sep
-elif [[ $(id -un) == $serviceacct ]]; then
-   echo Check for $serviceacct user specific open file and process limits
+   echo Check for $srvid user specific open file and process limits
+   clush $parg "echo -n 'Open process limit(should be >=32K): '; ${SUDO:-} su - $srvid -c 'ulimit -u'"
+   clush $parg "echo -n 'Open file limit(should be >=32K): '; ${SUDO:-} su - $srvid -c 'ulimit -n'"; echo $sep
+   echo Check for $srvid users java exec permission and version
+   clush $parg $parg2 "echo -n 'Java version: '; ${SUDO:-} su - $srvid -c 'java -version'"; echo $sep
+   clush $parg $parg2 "echo -n 'Locale setting(must be en_US): '; ${SUDO:-} su - $srvid -c 'locale |grep LANG'"; echo $sep
+   echo "Check for $srvid passwordless ssh (only for MapR v3.x)"
+   clush $parg "${SUDO:-} ls ~$srvid/.ssh/authorized_keys"; echo $sep
+elif [[ $(id -un) == $srvid ]]; then
+   echo Check for $srvid user specific open file and process limits
    clush $parg "echo -n 'Open process limit(should be >=32K): '; ulimit -u"
    clush $parg "echo -n 'Open file limit(should be >=32K): '; ulimit -n"; echo $sep
-   echo Check for $serviceacct users java exec permission and version
+   echo Check for $srvid users java exec permission and version
    clush $parg $parg2 "echo -n 'Java version: '; java -version"; echo $sep
-   echo "Check for $serviceacct passwordless ssh (only for MapR v3.x)"
-   clush $parg "ls ~$serviceacct/.ssh/authorized_keys\*"; echo $sep
+   echo "Check for $srvid passwordless ssh (only for MapR v3.x)"
+   clush $parg "ls ~$srvid/.ssh/authorized_keys\*"; echo $sep
 else
-   echo Must have root access or sudo rights to check $serviceacct limits
+   echo Must have root access or sudo rights to check $srvid limits
 fi
 echo Check for system wide nproc and nofile limits
 clush $parg "${SUDO:-} [[ -d /etc/security/limits.d ]] && { grep -e nproc -e nofile /etc/security/limits.d/*.conf |grep -v ':#'; } || exit 0"

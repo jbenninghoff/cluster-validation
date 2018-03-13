@@ -36,7 +36,7 @@ fi
 hadoop mfs -ls /benchmarks/tera/in | grep ^-rwx | tail 
 
 # Define vars for TeraSort run
-logname=terasort-$(date -Imin|cut -c-16).log
+logname=terasort-$(date "+%FT%T").log
 nodes=$(maprcli node list -columns hostname,cpus,service |grep nodemanager |wc --lines)
 ((rtasks=nodes*${1:-2})) # Start with 2 reduce tasks per node, reduce tasks per node limited by available RAM
 echo nodes=$nodes | tee $logname

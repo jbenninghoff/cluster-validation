@@ -29,15 +29,15 @@ EOF
 exit
 }
 
-testtype=none; disks=unused; seq=false; size=4; DBG=''
+testtype=none; diskset=unused; seq=false; size=4; DBG=''
 while getopts "asdrz:-:" opt; do
   case $opt in
     -) case "$OPTARG" in
-         all) disks=all ;; #Show all disks, not just umounted/unused disks
+         all) diskset=all ;; #Show all disks, not just umounted/unused disks
          destroy) testtype=destroy ;; #Run iozone on all unused disks, destroying data
          *) echo "Invalid option --$OPTARG" >&2; usage ;;
        esac;;
-    a) disks=all ;;
+    a) diskset=all ;;
     s) seq=true ;;
     r) testtype=readtest ;;
     z) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && size=$OPTARG || { echo $OPTARG is not an number; exit; } ;;
@@ -45,7 +45,8 @@ while getopts "asdrz:-:" opt; do
     *) usage ;;
   esac
 done
-[[ -n "$DBG" ]] && echo Options set to:  disks: $disks, seq: $seq, size: $size 
+
+[[ -n "$DBG" ]] && echo Options set to:  diskset: $diskset, seq: $seq, size: $size 
 [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
 
 [[ $(id -u) -ne 0 ]] && { echo This script must be run as root; exit 1; }
@@ -55,25 +56,35 @@ find_unused_disks() {
    [[ -n "$DBG" ]] && set -x
    disklist=""
    fdisks=$(fdisk -l | awk '/^Disk .* bytes/{print $2}' |sort)
-   [[ -n "$DBG" ]] && echo fdisk output check loop
    for d in $fdisks; do
-      dev=${d%:} #strip colon off the dev path string
-      [[ -n "$DBG" ]] && echo Checking Device: $dev
-      [[ $dev == /dev/md* ]] && { mdisks="$mdisks $(mdadm --detail $dev | grep -o '/dev/[^0-9 ]*' | grep -v /dev/md)"; continue; }
-      mount | grep -q -w -e $dev -e ${dev}1 -e ${dev}2 && continue #if mounted skip device
-      swapon -s | grep -q -w $dev && continue #if swap partition skip device
-      type pvdisplay &> /dev/null && pvdisplay $dev &> /dev/null && continue #if physical volume is part of LVM, skip device
-      [[ $dev == *swap* ]] && continue #device name appears to be LVM swap device, skip device
-      lsblk -nl $(readlink -f $dev) | grep -i swap && continue #Looks like might be swap device
-      if [[ "$testtype" != "readtest" ]]; then
-         grep $dev /opt/mapr/conf/disktab &>/dev/null && continue #Looks like part of MapR disk set already
-         lsof $dev && continue #Looks like something has device open
+      [[ -n "$DBG" ]] && echo Fdisk list loop, Checking Device: $dev
+      dev=${d%:} # Strip colon off the dev path string
+      # If mounted, skip device
+      mount | grep -q -w -e $dev -e ${dev}1 -e ${dev}2 && continue
+      # If swap partition, skip device
+      swapon -s | grep -q -w $dev && continue
+      # If physical volume is part of LVM, skip device
+      type pvdisplay &> /dev/null && pvdisplay $dev &> /dev/null && continue
+      # If device name appears to be LVM swap device, skip device
+      [[ $dev == *swap* ]] && continue
+      # Looks like might be swap device
+      lsblk -nl $(readlink -f $dev) | grep -i swap && continue
+      # If device is part of encrypted partition, skip device
+      type cryptsetup >& /dev/null && cryptsetup isLuks $dev && continue
+      if [[ $dev == /dev/md* ]]; then
+         mdisks+="$(mdadm -D $dev |grep -o '/dev/[^0-9 ]*' |grep -v /dev/md) "
+         continue
       fi
-      cryptsetup isLuks $dev && continue #device is part of encrypted partition
-      disklist="$disklist $dev" #Survived all filters, add device to the list of unused disks
+      if [[ "$testtype" != "readtest" ]]; then
+         #Looks like part of MapR disk set already
+         grep $dev /opt/mapr/conf/disktab &>/dev/null && continue
+         #Looks like something has device open
+         lsof $dev && continue
+      fi
+      ## Survived all filters, add device to the list of unused disks!!
+      disklist="$disklist $dev"
    done
 
-   [[ -n "$DBG" ]] && echo MD check loop
    for d in $mdisks; do #Remove devices used by /dev/md*
       echo Removing MDisk from list: $d
       disklist=${disklist/$d/}
@@ -85,29 +96,30 @@ find_unused_disks() {
       echo Removing VG disk from list: $d
       disklist=${disklist/$d/}
    done
-   #Remove /dev/mapper duplicates from $disklist
+
+   # Remove /dev/mapper duplicates from $disklist
    for i in $disklist; do
       [[ "$i" != /dev/mapper* ]] && continue
       [[ -n "$DBG" ]] && echo Disk is mapper: $i
-      dupdev=$(lsblk | grep -B2 $(basename $i) |awk '/disk/{print "/dev/"$1}') #/dev/mapper underlying device
-      disklist=${disklist/$dupdev} #strip underlying device used by mapper from disklist
+      #/dev/mapper underlying device
+      dupdev=$(lsblk | grep -B2 $(basename $i) |awk '/disk/{print "/dev/"$1}')
+      #strip underlying device used by mapper from disklist
+      disklist=${disklist/$dupdev}
       #disklist=${disklist/$i} #strip mapper device
    done
-   [[ -n "$DBG" ]] && set +x
-   [[ -n "$DBG" ]] && echo DiskList: $disklist
+   [[ -n "$DBG" ]] && { set +x; echo DiskList: $disklist; }
    [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
 }
 
-##############################################################################
-
-case "$disks" in
+case "$diskset" in
    all)
       disklist=$(fdisk -l 2>/dev/null | awk '/^Disk \// {print $2}' |sort)
       echo -e "All disks: " $disklist; echo; exit
       ;;
    unused)
       find_unused_disks #Sets $disklist
-      echo $disklist | tr ' ' '\n' >/tmp/disk.list #write disk list for MapR install
+      #write disk list for MapR install
+      echo $disklist | tr ' ' '\n' >/tmp/disk.list
       [[ -n "$DBG" ]] && cat /tmp/disk.list
       [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
       if [[ -n "$disklist" ]]; then
@@ -128,40 +140,56 @@ case "$testtype" in
    readtest)
       [[ -n "$DBG" ]] && set -x
       #read-only dd test, possible even after MFS is in place
-      if [[ $seq == "true" ]]; then
+      ddopts="of=/dev/null iflag=direct bs=1M count=$((size*1000))"
+      if [[ $seq == "false" ]]; then
+         [[ -n "$DBG" ]] && echo Concurrent dd disklist: $disklist
          for i in $disklist; do
-            dd of=/dev/null if=$i iflag=direct bs=1M count=$((size*1000)) |& tee $(basename $i)-seq-dd.log
+            dd if=$i $ddopts |& tee $(basename $i)-dd.log &
          done
+         echo; echo "Waiting for dd to finish"
+         wait
+         echo
       else
          for i in $disklist; do
-            dd of=/dev/null if=$i iflag=direct bs=1M count=$((size*1000)) >& $(basename $i)-dd.log &
+            dd if=$i $ddopts |& tee $(basename $i)-seq-dd.log
          done
       fi
-      [[ $seq == "false" ]] && { echo; echo "Waiting for dd to finish"; wait; sleep 3; echo; }
+      sleep 3
       for i in $disklist; do grep -H MB/s $(basename $i)*-dd.log; done
       ;;
    destroy)
-      echo
       [[ -n "$DBG" ]] && set -x
-      service mapr-warden status && { echo 'MapR warden appears to be running, stop warden (e.g. service mapr-warden stop)'; exit; }
-      pgrep iozone && { echo 'iozone appears to be running, kill all iozones running (e.g. pkill iozone)'; exit; }
-
+      if service mapr-warden status; then
+         echo 'MapR warden appears to be running'
+         echo 'Stop warden (e.g. service mapr-warden stop)'
+         exit
+      fi
+      if pgrep iozone; then
+         echo 'iozone appears to be running'
+         echo 'kill all iozones running (e.g. pkill iozone)'
+         exit
+      fi
       #tar up previous log files
       files=$(ls *-{dd,iozone}.log 2>/dev/null)
-      [[ -n "$files" ]] && { tar czf disk-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; }
-
-      for disk in $disklist; do #TBD: use fio if fio is found on the path, fall back to iozone
-         if [[ $seq == "true" ]]; then
-            iozlog=$(basename $disk)-seq-iozone.log
-            $scriptdir/iozone -I -r 1M -s ${size}G -k 10 -+n -i 0 -i 1 -i 2 -f $disk > $iozlog #sequential iozone if disk controller suspected
-         else
+      if [[ -n "$files" ]]; then
+         tar czf disk-tests-$(date "+%FT%T" |tr : .).tgz $files
+         rm -f $files
+      fi
+      iozopts="-I -r 1M -s ${size}G -k 10 -+n -i 0 -i 1 -i 2"
+      if [[ $seq == "false" ]]; then # Benchmark all disks concurrently
+         for disk in $disklist; do
             iozlog=$(basename $disk)-iozone.log
-            $scriptdir/iozone -I -r 1M -s ${size}G -k 10 -+n -i 0 -i 1 -i 2 -f $disk > $iozlog& #concurrent iozone on all disks
+            $scriptdir/iozone $iozopts -f $disk > $iozlog &
             sleep 2 #Some disk controllers lockup without a delay
-         fi
-      done
-
-      [[ $seq == "false" ]] && { echo; echo "Waiting for all iozone to finish"; wait; sleep 3; echo; }
+         done
+         echo; echo "Waiting for iozone to finish"; wait; echo
+      else # Sequence through the disk list, one by one
+         for disk in $disklist; do
+            iozlog=$(basename $disk)-seq-iozone.log
+            $scriptdir/iozone $iozopts -f $disk > $iozlog
+         done
+         echo; echo "IOzone sequential testing done"; echo
+      fi
       ;;
    none)
       echo No test requested

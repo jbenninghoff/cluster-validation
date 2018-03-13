@@ -91,7 +91,15 @@ half2=( ${iplist[@]:$len} ) #extract second half of array (clients)
 
 # Tar up old log files
 for host in ${half2[@]}; do
-   ssh $host 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); [[ -n "$files" ]] && { tar czf network-tests-$(date "+%Y-%m-%dT%H-%M%z").tgz $files; rm -f $files; echo "$(hostname -s): Previous run results archived into: $PWD/network-tests-*.tgz"; }'
+   p1='files=$(ls *-{rpctest,iperf}.log 2>/dev/null); '
+   p1+='[[ -n "$files" ]] && '
+   p1+='{ tar czf network-tests-$(date "+%FT%T" |tr : .).tgz $files; '
+   p1+='rm -f $files; echo "$(hostname -s): '
+   p1+='Previous run results archived into: $PWD/network-tests-*.tgz"; }'
+   [[ -n "$DBG" ]] && echo ssh $host "$p1"
+   [[ -n "$DBG" ]] && echo ssh $host 'ls *-{rpctest,iperf}.log 2>/dev/null'
+   ssh $host "$p1"
+   #ssh $host 'files=$(ls *-{rpctest,iperf}.log 2>/dev/null); [[ -n "$files" ]] && { tar czf network-tests-$(date "+%FT%T").tgz $files; rm -f $files; echo "$(hostname -s): Previous run results archived into: $PWD/network-tests-*.tgz"; }'
 done
 echo
 
@@ -113,7 +121,7 @@ if [[ $(($len & 1)) -eq 1 ]]; then
    half2=( ${half2[@]:0:$len} )
    [[ -n "$DBG" ]] && echo half2: ${half2[@]}
 fi
-[[ -n "$DBG" ]] && read -p "$DBG: Press enter to continue or ctrl-c to abort"
+[[ -n "$DBG" ]] && read -p "DBG: Press enter to continue or ctrl-c to abort"
 
 ##### Servers ###############################################
 # Its possible but not recommended to manually define the array of server hosts
@@ -122,8 +130,8 @@ fi
 
 for node in "${half1[@]}"; do
   if [[ $runiperf == "true" ]]; then
-     ssh -n $node "$taskset $numanode0 $iperfbin -s -P$xtra > /dev/null" &  
-     [[ $procs -gt 1 ]] && ssh -n $node "$taskset $numanode1 $iperfbin -s -P$xtra -p $port2 > /dev/null" & 
+     ssh -n $node "$taskset $numanode0 $iperfbin -s > /dev/null" &  
+     [[ $procs -gt 1 ]] && ssh -n $node "$taskset $numanode1 $iperfbin -s -p $port2 > /dev/null" & 
   else
      ssh -n $node $rpctestbin -server &
   fi
@@ -132,7 +140,7 @@ done
 echo ${#half1[@]} Servers have been launched
 [[ $procs -gt 1 ]] && echo $procs processes per server launched
 sleep 5 # let the servers stabilize
-[[ -n "$DBG" ]] && read -p "$DBG: Press enter to continue or ctrl-c to abort"
+[[ -n "$DBG" ]] && read -p "DBG: Press enter to continue or ctrl-c to abort"
 
 ##### Clients ###############################################
 # Its possible but not recommended to manually define the array of client hosts
@@ -144,11 +152,9 @@ for node in "${half2[@]}"; do #Loop over all clients
   [[ -n "$DBG" ]] && echo client-node: $node, server-node: ${half1[$i]}
   if [[ $concurrent == "true" ]]; then
     if [[ $runiperf == "true" ]]; then
-      #ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -w 16K > ${half1[$i]}---$node-iperf.log" & #16K window size MapR uses
-      #ssh -n $node "$taskset $numanode0 $iperfbin -c ${half1[$i]} -n ${size}M -P$xtra > ${half1[$i]}---$node-iperf.log" &  #increase -n value 10x for better test
-      ssh -n $node "$taskset $numanode0 $iperfbin -c ${half1[$i]} -t 30 -P$xtra > ${half1[$i]}---$node-iperf.log" &  #increase -n value 10x for better test
+      #$iperfbin -w 16K #16K window size MapR uses
+      ssh -n $node "$taskset $numanode0 $iperfbin -c ${half1[$i]} -t 30 -P$xtra > ${half1[$i]}---$node-iperf.log" & 
       clients+=" $!" #catch this client PID
-      #[[ $procs -gt 1 ]] && ssh -n $node "$taskset $numanode1 $iperfbin -c ${half1[$i]} -n ${size}M -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" &
       [[ $procs -gt 1 ]] && { ssh -n $node "$taskset $numanode1 $iperfbin -c ${half1[$i]} -t 30 -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" & clients+=" $!"; }
     else
       if [[ $multinic == "true" ]]; then
@@ -167,7 +173,7 @@ for node in "${half2[@]}"; do #Loop over all clients
   else #Sequential mode can be used to help isolate NIC and cable issues
     if [[ $runiperf == "true" ]]; then
       [[ $procs -gt 1 ]] && ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" &
-      ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -P$xtra > ${half1[$i]}---$node-iperf.log" #use 10x -n value for better test
+      ssh -n $node "$iperfbin -c ${half1[$i]} -t 30 -P$xtra > ${half1[$i]}---$node-iperf.log"
     else
       if [[ $multinic == "true" ]]; then
         ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log"
@@ -193,17 +199,23 @@ sleep 3
 
 # Handle the odd numbered node count case (extra node)
 if [[ -n "$extraip" ]]; then
-[[ -n "$DBG" ]] && set -x
-   echo Measuring extra IP address
+   [[ -n "$DBG" ]] && set -x
+   echo Measuring extra IP address, NOT concurrent measurement
    ((i--)) #decrement to reuse last server in server list $half1
    if [[ $runiperf == "true" ]]; then
-      [[ $procs -gt 1 ]] && ssh -n $node "$iperfbin -c ${half1[$i]} -t30 -i3 -P$xtra -p $port2 > ${half1[$i]}---$extraip-$port2-iperf.log" &
-      ssh -n $extraip "$iperfbin -c ${half1[$i]} -t30 -i3 -P$xtra > ${half1[$i]}---$extraip-iperf.log" #Small initial test, increase size for better test
+      iargs="-c ${half1[$i]} -t30 -P$xtra"
+      ilog="${half1[$i]}--$extraip"
+      if [[ $procs -gt 1 ]]; then
+         ssh -n $extraip "$iperfbin $iargs -p $port2 > $ilog-$port2-iperf.log" &
+      fi
+      ssh -n $extraip "$iperfbin $iargs > $ilog-iperf.log"
    else
-      ssh -n $extraip "$rpctestbin -client -b 32 $size ${half1[$i]} > ${half1[$i]}---$extraip-rpctest.log"
+      rargs="-client -b 32 $size ${half1[$i]}"
+      rlog="${half1[$i]}--$extraip"
+      ssh -n $extraip "$rpctestbin $rargs > $rlog-rpctest.log"
    fi
    echo Extra IP address $extraip done.
-[[ -n "$DBG" ]] && set +x
+   [[ -n "$DBG" ]] && set +x
 fi
 
 # Define list of client nodes to collect results from
@@ -211,7 +223,7 @@ tmp=${half2[@]}
 [[ -n "$extraip" ]] && tmp="$tmp $extraip"
 [[ -n "$DBG" ]] && echo Clients: $tmp
 
-[[ -n "$DBG" ]] && read -p "$DBG: Press enter to continue or ctrl-c to abort"
+[[ -n "$DBG" ]] && read -p "DBG: Press enter to continue or ctrl-c to abort"
 echo
 [[ $concurrent == "true" ]] && echo Concurrent network throughput results || echo Sequential network throughput results
 if [[ $runiperf == "true" ]]; then
