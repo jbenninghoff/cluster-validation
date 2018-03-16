@@ -4,31 +4,43 @@
 usage() {
 cat << EOF
 
-Usage: $0 -s -m|-e -u -x -a -k ServicePrincipalName
+Usage:
+$0 -M -s -m|-e -u -x -a -k ServicePrincipalName -n ClusterName
+
+-M option to install MapR Metrics (Grafana, etc)
+-n option to specify cluster name (no spaces)
 -s option for secure cluster installation
 -k option for Kerberos cluster installation (implies -s)
 -m option for MFS only cluster installation
 -a option for cluster with dedicated admin nodes not running nodemanager
--e option for to install on edge node (no fileserver). Can combine with -s or -x
+-e option to install on edge node (no fileserver). Can combine with -s or -x
 -u option to upgrade existing cluster
 -x option to uninstall existing cluster, destroying all data!
 
 MapR Install methods:
-1) Manually following documentation at http://maprdocs.mapr.com/home/install.html
+1) Manually follow documentation at http://maprdocs.mapr.com/home/install.html
 2) Bash script using clush groups and yum (this script)
-3) MapR GUI installer (curl -LO http://package.mapr.com/releases/installer/mapr-setup.sh)
+3) MapR GUI installer
+   https://maprdocs.mapr.com/home/MapRInstaller.html
+   (curl -LO http://package.mapr.com/releases/installer/mapr-setup.sh)
 4) Ansible install playbooks
+   https://github.com/mapr-emea/mapr-ansible
 
-Install of MapR must be done as root (or with passwordless sudo as mapr service account)
+Install of MapR must be done as root
+(or with passwordless sudo as mapr service account)
+
+This script requires the following clush groups: clstr cldb zk rm hist
 
 EOF
 exit 2
 }
 
 secure=false; kerberos=false; mfs=false; uninstall=false; upgrade=false
-admin=false; edge=false
-while getopts "smuxaek:" opt; do
+admin=false; edge=false; metrics=false; clname=''
+while getopts "Msmuxaek:n:" opt; do
   case $opt in
+    M) metrics=true ;;
+    n) clname="$OPTARG" ;;
     s) secure=true; sopt="-S" ;;
     k) kerberos=true; secure=true; sopt="-S"; pn="$OPTARG" ;;
     m) mfs=true ;;
@@ -42,34 +54,41 @@ done
 
 setvars() {
    ########## Site specific variables
-   clname='' #Name for the entire cluster, no spaces
+   clname=${clname:-''} #Name for the entire cluster, no spaces
    # Login to web ui
-   admin1='' #Non-root, non-mapr linux account which has a known password
+   admin1='mapr' #Non-root, non-mapr linux account which has a known password
    mapruid=mapr; maprgid=mapr #MapR service account and group
    spwidth=4 #Storage Pool width
    distro=$(cat /etc/*release 2>/dev/null | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
    maprver=v5.2.0 #TBD: Grep repo file to confirm or alter
    clargs='-S'
-   export JAVA_HOME=/usr/java/default #Oracle JDK
-   #export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
-   # MapR rpm installs look for $JAVE_HOME, all clush/ssh cmds will forward setting
+   #export JAVA_HOME=/usr/java/default #Oracle JDK
+   export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
+   # MapR rpm installs look for $JAVE_HOME,
+   # all clush/ssh cmds will forward setting in ~/.ssh/environment
    (umask 0077 && echo JAVA_HOME=$JAVA_HOME >> $HOME/.ssh/environment)
    #If not root use sudo, assuming mapr account has password-less sudo
    [ $(id -u) -ne 0 ] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH '
    # If root has mapr public key on all nodes
    #clush() { /Users/jbenninghoff/bin/clush -l root $@; }
-   [ $(id -u) -ne 0 -a $(id un) != "$mapruid" ] && { echo This script must be run as root or $maprid; exit 1; }
+   clushgrps=true
+   [ $(id -u) -ne 0 -a $(id -un) != "$mapruid" ] && { echo This script must be run as root or $maprid; exit 1; }
 }
 setvars
 
 chk_prereq() {
    # Check cluster for pre-requisites
-   for grp in clstr cldb zk rm hist; do #Check for clush groups to layout services
-      if [[ $(nodeset -c @$grp) == 0 ]]; then 
-         echo clustershell group: $grp undefined
-         exit 1
-      fi
+   #Check for clush groups to layout services
+   for grp in clstr cldb zk rm hist; do
+      gmsg="Clustershell group: $grp undefined"
+      [[ $(nodeset -c @$grp) == 0 ]] && { echo $gmsg; clushgrps=false; }
    done
+   [[ "$clushgrps" == false ]] && exit 1
+
+   if [[ "$metrics" == true ]]; then
+      gmsg="Clustershell group: $metrics undefined"
+      [[ $(nodeset -c @$metrics) == 0 ]] && { echo $gmsg; exit 2; }
+   fi
 
    cldb1=$(nodeset -I0 -e @cldb) #first node in cldb group
    [[ -z "$clname" ]] && { echo Cluster name not set.  Set clname in this script; exit 2; }
@@ -79,6 +98,7 @@ chk_prereq() {
    clush -S -B -g clstr id $mapruid || { echo $mapruid account does not exist on all nodes; exit 3; }
    clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" || { echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit; exit 3; }
    clush -S -B -g clstr 'echo "MapR Repo Check "; yum -q search mapr-core' || { echo MapR RPMs not found; exit 3; }
+   #rpm --import http://package.mapr.com/releases/pub/maprgpg.key
    #clush -S -B -g clstr 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl' || { echo MapR repos not found; }
    #clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
    #TBD check for gpgcheck and key(s)
@@ -204,7 +224,7 @@ uninstall() {
    clush $clargs -g clstr -b ${SUDO:-} 'rm -rf /tmp/maprticket_*'
    exit
 }
-[[ "$uninstall" == "true" -a "$edge" == "false" ]] && uninstall # And exit 
+[[ "$uninstall" == "true" && "$edge" == "false" ]] && uninstall # And exit 
 
 do_edge_node() {
    if [[ $(nodeset -c @edge) == 0 ]]; then
@@ -309,6 +329,19 @@ install_services() {
 }
 install_services
 
+install_metrics() {
+   clush $clargs -g clstr "${SUDO:-} yum -y install mapr-collectd"
+   clush $clargs -g graf "${SUDO:-} yum -y install mapr-grafana"
+   clush $clargs -g otsdb "${SUDO:-} yum -y install mapr-opentsdb"
+}
+[[ "$metrics" == true ]] && install_metrics
+
+install_logmon() {
+   clush $clargs -g clstr "${SUDO:-} yum -y install mapr-fluentd"
+   clush $clargs -g clstr "${SUDO:-} yum -y install mapr-elasticsearch"
+   clush $clargs -g kiba "${SUDO:-} yum -y install mapr-kibana"
+}
+
 install_patch
 
 post_install() {
@@ -348,10 +381,11 @@ post_install_keys() {
 
 configure_mapr() {
    # Configure cluster
-   # v4.1+ use RM zeroconf, no -RM
-   confopts="-N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb)"
-   confopts+=" -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart"
+   # v4.1+ uses RM zeroconf, no -RM
+   confopts="-N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) "
+   confopts+="-HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart"
    [[ "$secure" == "true" ]] && confopts+=" -S"
+   [[ "$metrics" == "true" ]] && confopts+=" -OT $(nodeset -S, -e @otsdb)"
 
    clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh $confopts"
    if [[ $? -ne 0 ]]; then
