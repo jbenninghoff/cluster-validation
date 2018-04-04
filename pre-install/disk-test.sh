@@ -1,6 +1,9 @@
 #!/bin/bash
 # jbenninghoff 2013-Jan-06  vi: set ai et sw=3 tabstop=3:
 
+[[ $(id -u) -ne 0 ]] && { echo This script must be run as root; exit 1; }
+scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
+
 usage() {
 cat << EOF
 
@@ -45,12 +48,8 @@ while getopts "asdrz:-:" opt; do
     *) usage ;;
   esac
 done
-
-[[ -n "$DBG" ]] && echo Options set to:  diskset: $diskset, seq: $seq, size: $size 
+[[ -n "$DBG" ]] && echo Options set: diskset: $diskset, seq: $seq, size: $size 
 [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
-
-[[ $(id -u) -ne 0 ]] && { echo This script must be run as root; exit 1; }
-scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
 
 find_unused_disks() {
    [[ -n "$DBG" ]] && set -x
@@ -91,11 +90,18 @@ find_unused_disks() {
    done
 
    [[ -n "$DBG" ]] && echo VG check loop
-   pvsdisks=$(pvs | awk '$1 ~ /\/dev/{sub("[0-9]+$","",$1); print $1}')
-   for d in $pvsdisks; do #Remove devices used by VG
-      echo Removing VG disk from list: $d
+   #awkcmd='$6=="lvm"{sub(/[0-9]+/,"",$8); print "/dev/"$8}'
+   awkcmd='$2=="lvm" || $2=="part" {print "/dev/"$3}'
+   lvmdisks=$(lsblk -ln -o NAME,TYPE,PKNAME,MOUNTPOINT |awk "$awkcmd" |sort -u)
+   for d in $lvmdisks; do #Remove devices used by LVM or mounted partitions
+      echo Removing LVM disk from list: $d
       disklist=${disklist/$d/}
    done
+   #pvsdisks=$(pvs | awk '$1 ~ /\/dev/{sub("[0-9]+$","",$1); print $1}')
+   #for d in $pvsdisks; do #Remove devices used by VG
+   #   echo Removing VG disk from list: $d
+   #   disklist=${disklist/$d/}
+   #done
 
    # Remove /dev/mapper duplicates from $disklist
    for i in $disklist; do
@@ -118,7 +124,7 @@ case "$diskset" in
       ;;
    unused)
       find_unused_disks #Sets $disklist
-      #write disk list for MapR install
+      # Log the disk list for mapr-install.sh
       echo $disklist | tr ' ' '\n' >/tmp/disk.list
       [[ -n "$DBG" ]] && cat /tmp/disk.list
       [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
@@ -127,12 +133,13 @@ case "$diskset" in
          [[ -t 1 ]] && { tput -S <<< $'setab 3\nsetaf 0'; }
          echo Scrutinize this list carefully!!
          [[ -t 1 ]] && tput op
-         #echo -e "\033[33;5;7mScrutinize this list carefully!!\033[0m"
          echo
+         #echo -e "\033[33;5;7mScrutinize this list carefully!!\033[0m"
       else
          echo; echo "No Unused disks!"; echo; exit 1
       fi
-      #diskqty=$(echo $disklist | wc -w) #See /opt/mapr/conf/mfs.conf: mfs.max.disks
+      #diskqty=$(echo $disklist | wc -w)
+      #See /opt/mapr/conf/mfs.conf: mfs.max.disks
       ;;
 esac
 

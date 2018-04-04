@@ -35,7 +35,9 @@ EOF
 }
 
 # Handle script arguments
-DBG=''; clist=''; rows=$[100*1000*1000]; threads=30; table=usertable; cbuff=true; wkld=test-workload.txt load=true; create=false; istart=0; seq=0
+DBG=''; clients=''; rows=$[100*1000*1000]; threads=30; table=usertable;
+cbuff=true; wkld=test-workload.txt load=true; create=false; istart=0; seq=0
+presplit=false
 while getopts "Tdpncmt:r:s:w:" opt; do
   case $opt in
     d) DBG=true ;;
@@ -43,40 +45,45 @@ while getopts "Tdpncmt:r:s:w:" opt; do
     n) load=false ;;
     p) presplit=true ;;
     T) create=true ;;
-    m) table=/tables/usertable; threads=20; echo Using $table ;;
+    m) table=/benchmarks/usertable; threads=20; echo Using $table ;;
     t) [[ "$OPTARG" =~ ^[0-9]+$ ]] && threads=$OPTARG || { echo $OPTARG is not an number; exit; } ;;
     r) [[ "$OPTARG" =~ ^[0-9]+$ ]] && rows=$OPTARG || { echo $OPTARG is not an number; exit; } ;;
-    s) [[ "$OPTARG" =~ "*,*" ]] && clist=$OPTARG || { echo $OPTARG is not a host list; exit; } ;;
-    w) [[ "$OPTARG" =~ ".*" ]] && wkld=$OPTARG || echo Using $wkld ;;
+    s) [[ "$OPTARG" =~ .*,.* ]] && clients=$OPTARG || { echo $OPTARG is not a host list; exit; } ;;
+    w) [[ -n "$OPTARG" ]] && { wkld=$OPTARG; echo Using $wkld; } ;;
     \?) usage; exit ;;
   esac
 done
-[ -n "$DBG" ] && { echo clist: $clist, rows: $rows, threads: $threads, table: $table, wkld: $wkld, load: $load, cbuff: $cbuff; set +x; }
+[ -n "$DBG" ] && { echo clients: $clients, rows: $rows, threads: $threads, table: $table, wkld: $wkld, load: $load, cbuff: $cbuff; sleep 3; }
 
 # Set up some variables
-thishost=$(hostname -s)
-hostcount=1
-opcount=$[rows/hostcount]
-if [ -n "$clist" ]; then
-   hostarray=(${clist//,/ })
-   hostcount=${#hostarray[@]}
+setvars() {
+   hostcount=1
+   thishost=$(hostname -s)
    opcount=$[rows/hostcount]
-   i=0
-   for host in ${hostarray[@]}; do
-      [ "$host" == "$thishost" ] && { istart=$[opcount*i]; seq=$i; }
-      ((i++))
-   done
-fi
-[ $[$opcount / (1000)] -gt 0 ] && mag=$[$opcount / (1000)]K
-[ $[$opcount / (1000*1000)] -gt 0 ] && mag=$[$opcount / (1000*1000)]M
-[ $[$opcount / (1000*1000*1000)] -gt 0 ] && mag=$[$opcount / (1000*1000*1000)]B
-ycsbdir=/home/mapr/ycsb-0.12.0
-ycsbargs="-s -P $wkld -threads $threads -p table=$table -p clientbuffering=$cbuff -p recordcount=$rows -p operationcount=$opcount -cp $(hbase classpath)"
-tmpdate=$(date "+%FT%T")
-teelog="ycsb-${threads}T-$thishost-$seq-$mag-${table//\//-}-$tmpdate"
-#export CLASSPATH=$(hbase classpath) #YCSB insists on -cp 
+   if [ -n "$clients" ]; then
+      hostarray=(${clients//,/ })
+      hostcount=${#hostarray[@]}
+      opcount=$[rows/hostcount]
+      i=0
+      for host in ${hostarray[@]}; do
+         [ "$host" == "$thishost" ] && { istart=$[opcount*i]; seq=$i; }
+         ((i++))
+      done
+   fi
+   [ $[$opcount / (1000)] -gt 0 ] && mag=$[$opcount / (1000)]K
+   [ $[$opcount / (1000*1000)] -gt 0 ] && mag=$[$opcount / (1000*1000)]M
+   [ $[$opcount / (1000*1000*1000)] -gt 0 ] && mag=$[$opcount / (1000*1000*1000)]B
+   ycsbdir=/home/mapr/cluster-validation/post-install/ycsb-0.12.0
+   ycsbargs="-s -P $wkld -threads $threads -p table=$table "
+   ycsbargs+=" -p clientbuffering=$cbuff -p recordcount=$rows"
+   ycsbargs+=" -p operationcount=$opcount -cp $(hbase classpath)"
+   tmpdate=$(date '+%Y-%m-%dT%H+%M')
+   teelog="ycsb-${threads}T-$thishost-$seq-$mag-${table//\//-}-$tmpdate"
+   #export JAVA_CLASSPATH=$(hbase classpath) #YCSB insists on -cp 
+}
+setvars
 
-[ -n "$DBG" ] && echo bin/ycsb run hbase10 $ycsbargs -p insertcount=$opcount -p insertstart=$istart  tee $teelog
+[ -n "$DBG" ] && { echo bin/ycsb run hbase10 $ycsbargs -p insertcount=$opcount -p insertstart=$istart  tee $teelog; exit; }
 
 #Create table if requested
 if [ "$create" == "true" ]; then
@@ -93,14 +100,18 @@ if [ "$create" == "true" ]; then
 EOF
    else
       hbase shell <<-EOF2
-         create '$table', {NAME=>'family',COMPRESSION=>'none',IN_MEMORY=>'true'} #Simple table, not pre-split
+         # Simple table for MapR-DB
+         create '$table', {NAME=>'family',IN_MEMORY=>'true'}
+         #create '$table',{NAME=>'family',COMPRESSION=>'none',IN_MEMORY=>'true'}
 EOF2
    fi
-else
-   #Check for table
-   if (hbase shell <<< "exists '$table'" |grep -q "does not exist"); then
-      echo Table Does Not Exist; exit 2
-   fi
+fi
+
+#Check for table
+gs1='is not a MapRDB'
+gs2='does not exist'
+if (hbase shell <<< "exists '$table'" |grep -q -e "$gs1" -e "$gs2"); then
+   echo Table Does Not Exist; exit 2
 fi
 
 #Generate a workload file
@@ -148,6 +159,6 @@ fi
 teelog2=${teelog}-run.log
 bin/ycsb run hbase10 $ycsbargs |& tee $teelog2
 
-#teelog3=${teelog}-run.log
+#teelog3=${teelog}-run2.log
 #bin/ycsb run hbase10 $ycsbargs |& tee $teelog3
 

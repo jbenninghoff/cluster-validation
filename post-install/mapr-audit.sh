@@ -1,5 +1,5 @@
 #!/bin/bash
-# jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3
 
 usage() {
 cat << EOF
@@ -19,7 +19,7 @@ Usage: $0 [-d] [-v|-t] [s] [-e] [-a] [-g <clush group name>]
 EOF
 }
 
-verbose=false; terse=false; security=false; edge=false; group=all volacl=false
+verbose=false; terse=false; security=false; edge=false; group=all; volacl=false
 while getopts ":dvtsea:g:" opt; do
    case $opt in
       d) dbg=true ;;
@@ -34,40 +34,71 @@ while getopts ":dvtsea:g:" opt; do
    esac
 done
 
-sep=$(printf %80s); sep="${sep// /#}" #Substitute all blanks with ######
-parg="-b -g ${group:-all}" 
-srvid=$(awk -F= "/mapr.daemon.user/ {print \$2}" /opt/mapr/conf/daemon.conf || echo mapr) #guess at service acct if not found
-mrv=$(hadoop version |awk "NR==1 {printf("%1.1s\n", \$2)}")
-mrv=$( yarn rmadmin -getServiceState >& /dev/null && echo $mrv || echo 0; )
+setvars() {
+   eval printf -v sep "'#%.0s'" "{1..${COLUMNS:-80}}"
+   parg="-b -g ${group:-all}" 
+   mrv=$(hadoop version |awk 'NR==1 {printf("%1.1s\n", $2)}')
+   #printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
+   #TBD: If edge==true group!=all
+   #TBD: clush can use --hostfile <filename> if group cannot be set
+}
 
-# Function definitions, overall function flow executed at end of script
+if [[ -f /opt/mapr/conf/daemon.conf ]]; then
+   srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
+else
+   srvid=mapr #guess at service acct if not found
+fi
 
 maprcli_check() {
    if ( ! type maprcli > /dev/null 2>&1 ); then #If maprcli not on this machine
       node=$(nodeset -I0 -e @$group)
-      [ -z "$node" ] && read -e -p 'maprcli node not found, enter host name that can run maprcli: ' node
+      if [[ -z "$node" ]]; then
+         read -e -p 'maprcli not found, enter host name to run maprcli on: ' node
+      fi
       if ( ! ssh $node "type maprcli > /dev/null 2>&1" ); then
          echo maprcli not found on host $node, rerun with valid host name; exit
       fi
       node="ssh -qtt $node " #Single node to run maprcli commands from
       #chgu="su -u $srvid -c " # Run as service account
    fi
-   #node="sudo -u mapr  MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket " #Sudo to mapr on secure cluster
+   #Sudo to mapr on secure cluster
+   #node="sudo -u mapr  MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket "
+}
+
+sudo_setup() {
+   SUDO="sudo -u $srvid -i "
+   snode=$(nodeset -I0 -e @$group)
+   sscmd="sudo -U $srvid -ln 2>&1 |grep -q 'sudo: a password is required'"
+   if (ssh -qtt $snode $sscmd); then
+      read -s -e -p 'Enter sudo password: ' mypasswd
+      #echo $mypasswd | sudo -S -i dmidecode -t bios || exit
+      SUDO="echo $mypasswd | $SUDO -S "
+   fi
+
+   clcmd="${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers"
+   if (clush $parg -S $clcmd >& /dev/null); then
+      parg="-o -qtt $parg" # Add -qtt for sudo tty via ssh/clush
+      #To run sudo without a tty use:
+      # clush -ab -o -qtt
+      # "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"
+   fi
 }
 
 cluster_checks1() {
    echo ==================== MapR audits ================================
    date; echo $sep
-   if [ "$mrv" == "1" ] ; then # MRv1
+   if [[ "$mrv" == "1" ]] ; then # MRv1
       msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} timeout 9 hadoop job -list; echo $sep
-   elif [ "$mrv" == "2" ] ; then # MRv2
+   elif [[ "$mrv" == "2" ]] ; then # MRv2
       msg="Hadoop Jobs Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} timeout 9 mapred job -list; echo $sep
    fi
    msg="MapR Dashboard "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    if (type -p jq >/dev/null); then
-      ${node:-} maprcli dashboard info -json | jq '.data[] | {version, cluster,utilization}'; echo $sep
+      jqcmd='.data[] | {version, cluster,utilization}'
+      ${node:-} maprcli dashboard info -json | jq "$jqcmd"
+      echo $sep
    else
       ${node:-} maprcli dashboard info -json; echo $sep
    fi
@@ -86,16 +117,28 @@ cluster_checks1() {
 
 cluster_checks2() {
    echo ==================== Additional MapR audits ===========================
-   clush $parg "echo MapR /etc/shadow access:; ls -l /etc/shadow; id $srvid"; echo $sep
-   clush $parg "echo 'MapR SHMEM Segments:'; ${SUDO:-} ipcs -m | uniq -w10"; echo $sep
+   clush $parg "echo MapR /etc/shadow access:; ls -l /etc/shadow; id $srvid"
+   echo $sep
+   clush $parg "echo 'MapR SHMEM Segments:'; ${SUDO:-} ipcs -m | uniq -w10"
+   echo $sep
    clush $parg "echo MapR HostID:; cat /opt/mapr/hostid"; echo $sep
-   clush $parg "echo MapR Patch Installed; yum --noplugins list installed mapr-patch"; echo $sep
-   clush $parg "echo 'MapR Storage Pools'; ${SUDO:-} /opt/mapr/server/mrconfig sp list -v"; echo $sep
-   clush $parg "echo 'Cat mapr-clusters.conf, Checking for MapR Mirror enabling'; cat /opt/mapr/conf/mapr-clusters.conf"; echo $sep
-   #TBD: if mapr-clusters.conf has more than one line, look for mirror volumes {maprcli volume list -json |grep mirror???}
-   clush $parg "echo 'MapR Env Settings'; grep ^export /opt/mapr/conf/env.sh"; echo $sep
-   if [ "$mrv" == "1" ] ; then # MRv1
-      clush $parg "echo 'Mapred-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-0.20.2/conf/mapred-site.xml"; echo $sep
+   clush $parg "echo MapR Patch; yum --noplugins list installed mapr-patch"
+   echo $sep
+   #TBD: clush  -ab pgrep -af /opt/mapr/server/mfs |grep 5660 #-m size
+   clush $parg "echo 'MapR Storage Pools'; \
+                ${SUDO:-} /opt/mapr/server/mrconfig sp list -v"
+   echo $sep
+   clush $parg "echo 'Cat mapr-clusters.conf'; \
+                cat /opt/mapr/conf/mapr-clusters.conf"
+   echo $sep
+   #TBD: if mapr-clusters.conf has more than one line,
+   #look for mirror volumes {maprcli volume list -json |grep mirror???}
+   clush $parg "echo 'MapR Env Settings'; grep ^export /opt/mapr/conf/env.sh"
+   echo $sep
+   if [[ "$mrv" == "1" ]] ; then # MRv1
+      clush $parg "echo 'Mapred-site.xml Checksum Consistency'; \
+                   sum /opt/mapr/hadoop/hadoop-0.20.2/conf/mapred-site.xml"
+   echo $sep
       clush $parg "echo 'core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-0.20.2/conf/core-site.xml"; echo $sep
       clush $parg "echo 'MapR Central Logging Setting'; grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh"; echo $sep
    else
@@ -118,21 +161,31 @@ cluster_checks2() {
 }
 
 edgenode_checks() {
-   msg="Edge Node Checking "; printf "%s%s \n" "$msg" "${sep:${#msg}}"; echo
-   clush $parg 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'; echo $sep
+   msg="Edge Node Checking "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   clush $parg 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'
+   echo $sep
+
    msg="Checking for MySQL Server "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   clush $parg ${SUDO:-} "service mysqld status 2>/dev/null"; echo $sep
+   clush $parg ${SUDO:-} "service mysqld status 2>/dev/null"
+   echo $sep
+
    #TBD: Check Hive config
    #TBD: Check HS2 port and config
    #TBD: Check MetaStore port and config
-   #TBD: Check Hue port and config
-   #TBD: Check Sqoop config
+   msg="Checking Hive Configuration "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   clcmd="sed '/<!--.*-->/d' /opt/mapr/hive/hive-2.1/conf/hive-site.xml \
+         |sed '/<!--/,/-->/d' |grep '<name>'"
+   clush $parg ${SUDO:-} "$clcmd"
+   echo $sep
+
+   #TBD: Check Hue port and config (hue.ini)
+   #TBD: Check Sqoop config (RDBMS jars)
    #TBD: Check Pig config
-   #TBD: Check Spark/Yarn config
+   #TBD: Check Spark/Yarn config (spark-defaults.conf, web-proxy jar)
 }
 
 cluster_checks3() {
-   [ -n "$dbg" ] && set -x
+   [[ -n "$dbg" ]] && set -x
    msg="Verbose audits "; printf "%s%s \n" "$msg" "${sep:${#msg}}"; echo
    #$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
    #echo MapR disk list per host
@@ -145,7 +198,7 @@ cluster_checks3() {
    msg="MapR Storage Pool Details "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    ${node:-} maprcli dump balancerinfo | sort -r; echo $sep
    msg="Hadoop Configuration Variable Dump "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
-   if [ "$mrv" == "1" ] ; then # MRv1
+   if [[ "$mrv" == "1" ]] ; then # MRv1
       ${node:-} hadoop conf -dump | sort; echo $sep
    else
       ${node:-} hadoop conf-details print-all-effective-properties | grep -o '<name>.*</value>' |sed 's/<name>//;s/<\/value>//;s/<\/name><value>/=/'
@@ -159,14 +212,14 @@ cluster_checks3() {
    clush -b -g zk -g cldb "echo 'ZK and CLDB nice values'; ps -ocomm,pid,nice $(</opt/mapr/zkdata/zookeeper_server.pid) $(</opt/mapr/pid/cldb.pid)"
    echo $sep
    clush $parg "echo 'Guts 6sec snapshot'; /opt/mapr/bin/guts cpu:none rpc:none cache:none db:none cleaner:none time:all dsec:6"; echo $sep
-   [ -n "$dbg" ] && set +x
+   [[ -n "$dbg" ]] && set +x
 }
 
 security_checks() {
    msg="MapR Security Checks "; printf "\n%s%s \n\n" "$msg" "${sep:${#msg}}"
 
    # Edge or Cluster nodes (Linux checks)
-   clush $parg "echo -n 'SElinux status: '; ([ -d /etc/selinux -a -f /etc/selinux/config ] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo
+   clush $parg "echo -n 'SElinux status: '; ([[ -d /etc/selinux && -f /etc/selinux/config ]] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo
    clush $parg "echo Permissions on /etc/nsswitch.conf; stat -c '%U %G %A %a %n' /etc/nsswitch.conf"
    clush $parg 'echo nsswitch.conf settings; grep -v -e ^# -e ^$ /etc/nsswitch.conf'; echo
    clush $parg "echo Permissions on /tmp; stat -c '%U %G %A %a %n' /tmp"
@@ -181,7 +234,7 @@ security_checks() {
    clush $parg "echo Checking All TCP/UDP connections; netstat -t -u -p -e --numeric-ports"
 
    # Cluster nodes only
-   if [ "$edge" == "false" ]; then
+   if [[ "$edge" == "false" ]]; then
       msg="MapR Secure Mode "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
       ${node:-} maprcli dashboard info -json | grep 'secure.*true,' && maprsecure=true || echo === MapR cluster running non-secure
       msg="MapR Auditing Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
@@ -217,7 +270,7 @@ security_checks() {
    #TBD: Find Hue security settings
    echo
    #TBD: Check file permissions on files MapR embeds with passwords at install time, like /opt/mapr/hadoop/hadoop-0.20.2/conf/ssl-server.xml
-   if [ "$verbose" == "true" ]; then
+   if [[ "$verbose" == "true" ]]; then
       clush $parg 'echo Checking for Saved Passwords; find /opt/mapr -type f \( -iname \*.xml\* -o -iname \*.conf\* -o -iname \*.json\* \) -exec grep -Hi -m1 -A1 -e password -e jceks {} \;'
    else
       clush $parg 'echo Checking for Saved Passwords; find /opt/mapr -regex "/opt/mapr/.*conf.old" -prune -o -regex "/opt/mapr/.*conf.new" -prune -o -regex "/opt/mapr/hadoop/hadoop-2.*/share" -prune -o -path /opt/mapr/hadoop/OLD_HADOOP_VERSIONS -prune -o -path /opt/mapr/tmp -o -type f \( -iname \*.xml\* -o -iname \*.conf\* -o -iname \*.json\* \) -exec grep -Hi -m1 -A1 -e password -e jceks {} \;'
@@ -249,43 +302,27 @@ volume_acls() {
    done
 }
 
-# Define Sudo options if not running as service acct
-sudo_setup() {
-if [ $(id -un) != "$srvid" ]; then
-   snode=$(nodeset -I0 -e @$group)
-   if (ssh -qtt $snode sudo -U $srvid -ln 2>&1 | grep -q 'sudo: a password is required'); then
-      read -s -e -p 'Enter sudo password: ' mypasswd
-      #echo $mypasswd | sudo -S -i dmidecode -t bios || exit
-      SUDO="echo $mypasswd | sudo -u $srvid -S -i "
-   else
-      SUDO="sudo -u $srvid PATH=/sbin:/usr/sbin:$PATH "
-   fi
-   if (clush $parg -S "${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers" >& /dev/null); then
-      parg="-o -qtt $parg" # Add -qtt for sudo tty via ssh/clush
-      #echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To run sudo without a tty
-   fi
-fi
-}
-
+setvars
 maprcli_check
-[ "$edge" == "false" ] && cluster_checks1
+[[ "$edge" == "false" ]] && cluster_checks1
 
-type clush >/dev/null 2>&1 || { echo clush required for advanced options; exit 1; }; echo $sep
-if [ $(nodeset -c @${group:-all}) -gt 0 ]; then
-   echo NodeSet: $(nodeset -e @${group:-all})
-else
+if ! type clush &>/dev/null; then 
+   echo clush required for advanced options; exit 1
+fi
+if [[ $(nodeset -c @${group:-all}) == 0 ]]; then
    echo group: ${group:-all} does not exist; exit 2
 fi
-if [ ! -d /opt/mapr ]; then
-   echo MapR not installed locally
-   clush $parg -S test -d /opt/mapr ||{ echo MapR not installed in node group $group; exit; }
+if ! clush $parg -S test -d /opt/mapr; then
+   echo MapR not installed in node group $group; exit 3
 fi
+echo $sep
 
-sudo_setup
-[ "$edge" == "false" -a "$terse" == "false" ] && cluster_checks2
-[ "$edge" == "false" -a "$verbose" == "true" ] && cluster_checks3
-[ "$edge" == "false" -a "$volacl" == "true" ] && volume_acls
-[ "$edge" == "true" ] && edgenode_checks
-[ "$security" == "true" ] && security_checks
+[[ "$(id -un)" != "$srvid" ]] && sudo_setup
+[[ "$edge" == "false" && "$terse" == "false" ]] && cluster_checks2
+[[ "$edge" == "false" && "$verbose" == "true" ]] && cluster_checks3
+[[ "$edge" == "false" && "$volacl" == "true" ]] && volume_acls
+[[ "$edge" == "true" ]] && edgenode_checks
+[[ "$security" == "true" ]] && security_checks
 
-echo "Extract cluster summary from log: awk 'FNR==1 {print FILENAME}; /[ \t]+\"version\":/; /[ \t]+\"cluster\":/,/},/' mapr-audit-*.log"
+echo "Extract cluster summary from log with awk: "
+echo "awk 'FNR==1 {print FILENAME}; /[ \t]+\"version\":/; /[ \t]+\"cluster\":/,/},/' mapr-audit-*.log"

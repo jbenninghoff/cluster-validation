@@ -19,17 +19,17 @@ $0 -M -s -m|-e -u -x -a -k ServicePrincipalName -n ClusterName
 
 MapR Install methods:
 1) Manually follow documentation at http://maprdocs.mapr.com/home/install.html
-2) Bash script using clush groups and yum (this script)
-3) MapR GUI installer
+2) MapR GUI installer
    https://maprdocs.mapr.com/home/MapRInstaller.html
    (curl -LO http://package.mapr.com/releases/installer/mapr-setup.sh)
+3) Bash script using clush groups and yum (this script)
 4) Ansible install playbooks
    https://github.com/mapr-emea/mapr-ansible
 
 Install of MapR must be done as root
 (or with passwordless sudo as mapr service account)
 
-This script requires the following clush groups: clstr cldb zk rm hist
+This script requires these clush groups: clstr cldb zk rm hist [metrics]
 
 EOF
 exit 2

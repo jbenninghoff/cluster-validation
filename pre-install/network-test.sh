@@ -131,11 +131,14 @@ fi
 for node in "${half1[@]}"; do
   if [[ $runiperf == "true" ]]; then
      ssh -n $node "$taskset $numanode0 $iperfbin -s > /dev/null" &  
-     [[ $procs -gt 1 ]] && ssh -n $node "$taskset $numanode1 $iperfbin -s -p $port2 > /dev/null" & 
+     if [[ $procs -gt 1 ]]; then
+        ssh -n $node "$taskset $numanode1 $iperfbin -s -p $port2 >/dev/null" & 
+     fi
   else
      ssh -n $node $rpctestbin -server &
   fi
-  #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
+  #ssh $node 'echo $[4*1024] $[1024*1024] $[4*1024*1024] | \
+  #tee /proc/sys/net/ipv4/tcp_wmem > /proc/sys/net/ipv4/tcp_rmem'
 done
 echo ${#half1[@]} Servers have been launched
 [[ $procs -gt 1 ]] && echo $procs processes per server launched
@@ -153,9 +156,13 @@ for node in "${half2[@]}"; do #Loop over all clients
   if [[ $concurrent == "true" ]]; then
     if [[ $runiperf == "true" ]]; then
       #$iperfbin -w 16K #16K window size MapR uses
-      ssh -n $node "$taskset $numanode0 $iperfbin -c ${half1[$i]} -t 30 -P$xtra > ${half1[$i]}---$node-iperf.log" & 
-      clients+=" $!" #catch this client PID
-      [[ $procs -gt 1 ]] && { ssh -n $node "$taskset $numanode1 $iperfbin -c ${half1[$i]} -t 30 -P$xtra -p $port2 > ${half1[$i]}---$node-$port2-iperf.log" & clients+=" $!"; }
+      cmd="$taskset $numanode0 $iperfbin -c ${half1[$i]} -t 30 -P$xtra"
+      ssh -n $node "$cmd > ${half1[$i]}--$node-iperf.log" & 
+      clients+=" $!" #catch PID
+      if [[ $procs -gt 1 ]]; then
+         ssh -n $node "$cmd -p $port2 >${half1[$i]}--$node-$port2-iperf.log" & 
+         clients+=" $!" #catch PID
+      then
     else
       if [[ $multinic == "true" ]]; then
          ssh -n $node "$rpctestbin -client -b 32 $size ${multinics[$i]} > ${half1[$i]}---$node-rpctest.log" &
@@ -200,7 +207,7 @@ sleep 3
 # Handle the odd numbered node count case (extra node)
 if [[ -n "$extraip" ]]; then
    [[ -n "$DBG" ]] && set -x
-   echo Measuring extra IP address, NOT concurrent measurement
+   echo Measuring extra IP address, NOT a concurrent measurement
    ((i--)) #decrement to reuse last server in server list $half1
    if [[ $runiperf == "true" ]]; then
       iargs="-c ${half1[$i]} -t30 -P$xtra"
