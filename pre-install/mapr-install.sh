@@ -127,7 +127,9 @@ install_patch() { #Find, Download and install mapr-patch version $maprver
 }
 
 do_upgrade() {
-   #TBD: grep secure=true /opt/mapr/conf/mapr-clusters.conf && { cp ../post-install/mapr-audit.sh /tmp; sudo -u $mapruid /tmp/mapr-audit.sh; }
+   #TBD: grep secure=true /opt/mapr/conf/mapr-clusters.conf && 
+   # { cp ../post-install/mapr-audit.sh /tmp;
+   # sudo -u $mapruid /tmp/mapr-audit.sh; }
    #sudo -u mapr bash -c : && RUNAS="sudo -u mapr"; $RUNAS bash <<EOF
    # Source cluster_checks1 function from mapr-audit.sh
    #source <(sed -n '/^ *cluster_checks1()/,/^ *} *$/p' mapr-audit.sh)
@@ -137,46 +139,70 @@ do_upgrade() {
    clush -g clstr -b ${SUDO:-} umount /mapr
    #TBD: exit if other mounts found
    clush -g clstr -b ${SUDO:-} nfsstat -m
-   read -p "Press enter to continue or ctrl-c to abort, abort if any mounts exist"
+   readtxt='Press enter to continue or ctrl-c to abort, '
+   readtxt+='abort if any mounts exist'
+   read -p "$readtxt"
 
    #Check repo version
    clush -B -g clstr ${SUDO:-} "yum clean all"
-   clush -S -B -g clstr ${SUDO:-} 'grep -i ^baseurl=http /etc/yum.repos.d/*mapr*.repo' || { echo MapR repos not found; exit 3; }
-   echo; echo Review the HTTP URLs for the correct MapR version to be upgraded to
-   echo If MapR EcoSystem URL is available, all installed MapR EcoSystem RPMs will be updated
+   clcmd="${SUDO:-} 'grep -i ^baseurl=http /etc/yum.repos.d/*mapr*.repo'"
+   clcmd+=" || { echo MapR repos not found; exit 3; }"
+   clush -S -B -g clstr "$clcmd"
+   echo
+   echo Review the HTTP URLs for the correct MapR version to be upgraded to
+   echo If MapR EcoSystem URL is available, all installed MapR EcoSystem RPMs
+   echo will be updated
    read -p "Press enter to continue or ctrl-c to abort"
 
    # Check for active Yarn or JobTracker jobs
    # stop centralconfig
    # stop ingest like Sqoop or Flume, maybe in crontab or Jensen or edge nodes
-   # check machines for NFS mounts with 'nfsstat -m' or 'netstat -an | grep 2049' using clush -ab
-   # On all NFS client machines found, run lsof /mntpoint and/or fuser -c /mntpoint; stop or kill all procs using NFS
+   # check machines for NFS mounts with
+   # 'nfsstat -m' or 'netstat -an | grep 2049' using clush -ab
+   # On all NFS client machines found,
+   # run lsof /mntpoint and/or fuser -c /mntpoint;
+   # stop or kill all procs using NFS
    # Stop MapR
    clush -g clstr -b ${SUDO:-} service mapr-warden stop
    clush -g zk -b ${SUDO:-} service mapr-zookeeper stop
    clush -g clstr -b ${SUDO:-} jps
    clush -g clstr -b ${SUDO:-} pkill -u $mapruid
    clush -g clstr -b ${SUDO:-} "ps ax | grep $mapruid"
-   read -p "If any $mapruid process still running, press ctrl-c to abort and kill all manually"
+   readtxt="If any $mapruid process still running, "
+   readtxt+="press ctrl-c to abort and kill all manually"
+   read -p "$readtxt"
 
    # Backup conf files
-   folder_list='conf/ hadoop/hadoop-*/etc/hadoop/ hadoop/hadoop-*/conf drill/drill-*/conf/ hbase/hbase-*/conf zkdata/ spark/spark-*/conf/ sqoop/sqoop-*/conf/ hive/hive-*/conf/ roles/'
-   clush -g clstr -b ${SUDO:-} "cd /opt/mapr/ && tar cfz $HOME/mapr_configs-$(hostname -f)-$(date "+%FT%T").tgz ${folder_list}"
+   folder_list='conf/ hadoop/hadoop-*/etc/hadoop/ hadoop/hadoop-*/conf '
+   folder_list+='drill/drill-*/conf/ hbase/hbase-*/conf zkdata/ '
+   folder_list+='spark/spark-*/conf/ sqoop/sqoop-*/conf/ '
+   folder_list+='hive/hive-*/conf/ roles/'
+   clcmd="${SUDO:-} cd /opt/mapr/ && "
+   clcmd+="tar cfz $HOME/mapr_configs-\$(hostname -f)-\$(date "+%FT%T").tgz "
+   clcmd+="${folder_list}"
+   clush -g clstr -b "$clcmd"
+   #ansible -i /etc/ansible/hosts all -m shell -a "$clcmd"
    clush -g clstr -b ${SUDO:-} "ls -l $HOME/mapr_configs*.tgz"
+   #ansible -i /etc/ansible/hosts all -m shell -a "ls -l $HOME/mapr_conf*.tgz"
 
    # Remove mapr-patch
    clush -g clstr -b ${SUDO:-} yum -y erase mapr-patch
 
    # Update all MapR RPMs on all nodes
-   clush -v -g clstr ${SUDO:-} "yum -y update mapr-\*" #Exclude specific rpms with --exclude=mapr-some-somepackage
-   read -p "Check console for errors.  If none, press enter to continue or ctrl-c to abort"
+   # yum --disablerepo mapr-eco update mapr-\*
+   #Exclude specific rpms with --exclude=mapr-some-somepackage
+   clush -v -g clstr ${SUDO:-} "yum -y update mapr-\*"
+   readtxt="Check console for errors.  If none, press enter to continue or "
+   readtxt+="ctrl-c to abort"
+   read -p "$readtxt"
 
    # Download and install mapr-patch
    install_patch
 
    # Run configure.sh -R to insure configuration is updated
    clush -g clstr -b ${SUDO:-} /opt/mapr/server/configure.sh -R
-   # TBD: modify yarn-site.xml and mapred-site.xml and container-executor.cfg when upgrading
+   # TBD: modify yarn-site.xml and mapred-site.xml and container-executor.cfg
+   # when upgrading
 
    # Start rpcbind, zk and warden
    clush -g clstr -b ${SUDO:-} service rpcbind restart
@@ -186,7 +212,8 @@ do_upgrade() {
    clush -g clstr -b ${SUDO:-} service mapr-warden start
    sleep 90
    export MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket
-   sudo -u mapr maprcli config save -values {mapr.targetversion:"`cat /opt/mapr/MapRBuildVersion`"}
+   maprconf='{mapr.targetversion:"`cat /opt/mapr/MapRBuildVersion`"}'
+   sudo -u mapr maprcli config save -values "$maprconf"
    sudo -u mapr maprcli cluster feature enable -all
    exit
 }
@@ -203,7 +230,9 @@ uninstall() {
    clush $clargs -g clstr -b ${SUDO:-} jps
    clush $clargs -g clstr -b ${SUDO:-} pkill -u $mapruid
    clush $clargs -g clstr -b "${SUDO:-} ps ax | grep $mapruid"
-   read -p "If any $mapruid process is still running, press ctrl-c to abort and kill all manually"
+   readtxt="If any $mapruid process is still running, "
+   readtxt+="press ctrl-c to abort and kill all $mapruid processes manually"
+   read -p "$readtxt"
    cp /opt/mapr/conf/disktab /var/tmp/mapr-disktab
    echo Copy of disktab saved to /var/tmp/
 
@@ -214,7 +243,8 @@ uninstall() {
 
    case $distro in
       redhat|centos|red*)
-         clush $clargs -g clstr -b ${SUDO:-} "yum clean all; yum -y erase mapr-\*" ;;
+         clcmd="yum clean all; yum -y erase mapr-\*"
+         clush $clargs -g clstr -b ${SUDO:-} "$clcmd" ;;
       ubuntu)
          clush -g clstr -B 'dpkg -P mapr-\*' ;;
       *) echo Unknown Linux distro! $distro; exit ;;

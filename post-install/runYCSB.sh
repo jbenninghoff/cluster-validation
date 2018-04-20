@@ -53,7 +53,10 @@ while getopts "Tdpncmt:r:s:w:" opt; do
     \?) usage; exit ;;
   esac
 done
-[ -n "$DBG" ] && { echo clients: $clients, rows: $rows, threads: $threads, table: $table, wkld: $wkld, load: $load, cbuff: $cbuff; sleep 3; }
+if [[ -n "$DBG" ]]; then
+   echo clients: $clients, rows: $rows, threads: $threads, table: $table
+   echo wkld: $wkld, load: $load, cbuff: $cbuff; echo Sleeping 9s; sleep 9
+fi
 
 # Set up some variables
 setvars() {
@@ -83,8 +86,6 @@ setvars() {
 }
 setvars
 
-[ -n "$DBG" ] && { echo bin/ycsb run hbase10 $ycsbargs -p insertcount=$opcount -p insertstart=$istart  tee $teelog; exit; }
-
 #Create table if requested
 if [ "$create" == "true" ]; then
    hbase shell <<< "disable '$table'; drop '$table'"
@@ -108,8 +109,7 @@ EOF2
 fi
 
 #Check for table
-gs1='is not a MapRDB'
-gs2='does not exist'
+gs1='is not a MapRDB';  gs2='does not exist'
 if (hbase shell <<< "exists '$table'" |grep -q -e "$gs1" -e "$gs2"); then
    echo Table Does Not Exist; exit 2
 fi
@@ -147,7 +147,10 @@ maxscanlength=100
 scanlengthdistribution=uniform
 EOF3
 
-[ -n "$DBG" ] && { echo bin/ycsb run hbase10 $ycsbargs -p insertcount=$opcount -p insertstart=$istart  tee $teelog; exit; }
+if [[ -n "$DBG" ]]; then
+   echo -n "bin/ycsb run hbase10 $ycsbargs -p insertcount=$opcount "
+   echo "-p insertstart=$istart  |tee $teelog"; exit
+fi
 
 #YCSB load phase
 if [ "$load" == "true" ]; then

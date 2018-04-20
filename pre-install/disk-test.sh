@@ -26,23 +26,25 @@ Options:
 -s: Run iozone tests sequentially to tests disks individually
 -z: Specify test size in Gigabytes (default is 4 (4GB), quick test)
 -r: Run read-only dd based test
+-p: Preserve existing /tmp/disk.list file and use it.
 -d: Enable debug statements
 
 EOF
 exit
 }
 
-testtype=none; diskset=unused; seq=false; size=4; DBG=''
-while getopts "asdrz:-:" opt; do
+testtype=none; diskset=unused; seq=false; size=4; preserve=false; DBG=''
+while getopts "pasdrz:-:" opt; do
   case $opt in
     -) case "$OPTARG" in
          all) diskset=all ;; #Show all disks, not just umounted/unused disks
-         destroy) testtype=destroy ;; #Run iozone on all unused disks, destroying data
+         destroy) testtype=destroy ;; #Run iozone on all unused disks
          *) echo "Invalid option --$OPTARG" >&2; usage ;;
        esac;;
     a) diskset=all ;;
     s) seq=true ;;
     r) testtype=readtest ;;
+    p) preserve=true ;;
     z) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && size=$OPTARG || { echo $OPTARG is not an number; exit; } ;;
     d) DBG=true ;; # Enable debug statements
     *) usage ;;
@@ -113,6 +115,16 @@ find_unused_disks() {
       disklist=${disklist/$dupdev}
       #disklist=${disklist/$i} #strip mapper device
    done
+   # Remove /dev/secvm/dev duplicates from $disklist (Vormetric)
+   for i in $disklist; do
+      [[ "$i" != /dev/secvm/dev/* ]] && continue
+      [[ -n "$DBG" ]] && echo Disk is Vormetric: $i
+      #/dev/secvm/dev underlying device
+      dupdev=$(lsblk | grep -B2 $(basename $i) |awk '/disk/{print "/dev/"$1}')
+      #strip underlying device used by secvm(Vormetric) from disklist
+      disklist=${disklist/$dupdev}
+      #disklist=${disklist/$i} #strip secvm(Vormetric) device
+   done
    [[ -n "$DBG" ]] && { set +x; echo DiskList: $disklist; }
    [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
 }
@@ -125,7 +137,7 @@ case "$diskset" in
    unused)
       find_unused_disks #Sets $disklist
       # Log the disk list for mapr-install.sh
-      echo $disklist | tr ' ' '\n' >/tmp/disk.list
+      [[ $preserve == false ]] && echo $disklist | tr ' ' '\n' >/tmp/disk.list
       [[ -n "$DBG" ]] && cat /tmp/disk.list
       [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
       if [[ -n "$disklist" ]]; then

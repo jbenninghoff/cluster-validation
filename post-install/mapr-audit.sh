@@ -124,7 +124,9 @@ cluster_checks2() {
    clush $parg "echo MapR HostID:; cat /opt/mapr/hostid"; echo $sep
    clush $parg "echo MapR Patch; yum --noplugins list installed mapr-patch"
    echo $sep
-   #TBD: clush  -ab pgrep -af /opt/mapr/server/mfs |grep 5660 #-m size
+   clush ${parg/-b/} "echo MFS Heap Size; pgrep -oaf /opt/mapr/server/mfs" | \
+   grep -e '\-m [^ ]*' -e '^[^ ]*'
+   echo $sep
    clush $parg "echo 'MapR Storage Pools'; \
                 ${SUDO:-} /opt/mapr/server/mrconfig sp list -v"
    echo $sep
@@ -239,6 +241,9 @@ security_checks() {
       ${node:-} maprcli dashboard info -json | grep 'secure.*true,' && maprsecure=true || echo === MapR cluster running non-secure
       msg="MapR Auditing Status "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} maprcli config load -json | grep "mfs.feature.audit.support" && mapraudit=true || echo === MapR FS Auditing unavailable
+      msg="MapR Fast Inode Scan "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
+      ${node:-} maprcli config load -json | grep "mfs.feature.fastinodescan.support" && fastinodes=true || echo === MapR Fast Inode Scan not enabled
+      # Fast Inode Scan helps mirroring thousands/millions of files/volume
       msg="MapR Cluster Admin ACLs"; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} maprcli acl show -type cluster
       # Check for MapR whitelist: http://doc.mapr.com/display/MapR/Configuring+MapR+Security#ConfiguringMapRSecurity-whitelist
@@ -324,5 +329,7 @@ echo $sep
 [[ "$edge" == "true" ]] && edgenode_checks
 [[ "$security" == "true" ]] && security_checks
 
-echo "Extract cluster summary from log with awk: "
-echo "awk 'FNR==1 {print FILENAME}; /[ \t]+\"version\":/; /[ \t]+\"cluster\":/,/},/' mapr-audit-*.log"
+echo "Extract cluster summary from the captured output log with awk: "
+awkcmd='FNR==1 {print FILENAME}; /[ \t]+\"version\":/; '
+awkcmd+='/[ \t]+\"cluster\":/,/},/'
+echo "awk '$awkcmd' mapr-audit-*.log"
