@@ -1,19 +1,19 @@
 Cluster Validation
 ==================
 
-Before installing MapR Hadoop it is invaluable to validate the
+Before installing MapR it is critically important to validate the
 hardware and software that MapR will be dependent on.  Doing so
-will verify that items like disks and DIMMs are performing as
-expected and with a known benchmark metric.  Doing so will also
+will verify that items like disks, CPUs and NICs are performing as
+expected and the benchmark metric logged.  Doing so will also
 verify that many of the basic OS configurations and packages are
-in the required state and that state is also recorded in the output
+in the required state and that state is also recorded in an output
 log.
 
 Please use the steps below to test CPU/RAM, disk, and networking
 performance as well as to verify that your cluster meets MapR
 installation requirements. Pre-install tests should be run before
 installing MapR.  Post-install tests should be run after installing
-the MapR software and configuring a cluster.  Post-install tests 
+the MapR software and configuring it.  Post-install tests 
 help assure that the cluster is in good working order and ready 
 to hand over to your production team.
 
@@ -45,6 +45,7 @@ If you don't find clustershell in EPEL, you may be able to download rpm here:
 Next, download and extract the cluster-validation package with a command like this:
 
     curl -L -o cluster-validation.tgz http://github.com/MapRPS/cluster-validation/tarball/master
+
 Extract with tar in /root or your home folder and rename the top level folder like this:  
 
     mv jbenninghoff-cluster-validation-* cluster-validation
@@ -159,8 +160,8 @@ modified and used for a scripted install by experienced users.
 
    pre-install/mapr-install.sh -h
 
-Otherwise, follow the instructions from the http://doc.mapr.com web
-site for cluster installation.
+Otherwise, follow the instructions from the mapr web site:
+http://maprdocs.mapr.com/home/install.html
 
 Post Installation tests
 --------------------------------
@@ -183,7 +184,7 @@ can be run to provide an audit log of the MapR configuration.  The
 script contains a useful set of example maprcli commands. There are
 also example install, upgrade and un-install options to mapr-install.sh
 that leverage clush to run quickly on an entire set of nodes or
-cluster.  Many scripts will not run without editing, so read the
+cluster.  Some of the scripts will not run without editing, so read the
 scripts carefully to understand how to edit them with site specific
 info.  All scripts support the -h option to show help on usage.
 

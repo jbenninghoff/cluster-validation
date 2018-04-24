@@ -176,29 +176,31 @@ sleep 5 # let the servers stabilize
 i=0 # Index into the server array
 for node in "${half2[@]}"; do #Loop over all clients
    [[ -n "$DBG" ]] && echo client-node: $node, server-node: ${half1[$i]}
+   log="${half1[$i]}--$node-iperf.log"
    if [[ $concurrent == "true" ]]; then
       if [[ $runiperf == "true" ]]; then
          #$iperfbin -w 16K #16K window size MapR uses
          cmd="$taskset $numanode0 $iperfbin -c ${half1[$i]} -t 30 -P$xtra"
-         ssh -n $node "$cmd > ${half1[$i]}--$node-iperf.log" & 
+         ssh -n $node "$cmd > $log" & 
          clients+=" $!" #catch PID
          if [[ $procs -gt 1 ]]; then
             cmd="$taskset $numanode1 $iperfbin -c ${half1[$i]} -t 30 -P$xtra"
-            ssh -n $node "$cmd -p $port2 >${half1[$i]}--$node-$port2-iperf.log"&
+            ssh -n $node "$cmd -p $port2 > ${log/iperf/$port2-iperf/}" &
             clients+=" $!" #catch PID
          fi
       else
+         log="${half1[$i]}--$node-rpctest.log"
          if [[ $multinic == "true" ]]; then
             cmd="$rpctestbin -client -b 32 $size ${multinics[$i]}"
-            ssh -n $node "$cmd > ${half1[$i]}---$node-rpctest.log" &
+            ssh -n $node "$cmd > $log" &
             clients+=" $!" #catch this client PID
          else
             #increase $size value 10x for better test
             cmd="$rpctestbin -client -b 32 $size ${half1[$i]}"
-            ssh -n $node "$cmd > ${half1[$i]}--$node-rpctest.log" &
+            ssh -n $node "$cmd > $log" &
             clients+=" $!" #catch this client PID
             if [[ $procs -gt 1 ]]; then
-               ssh -n $node "$cmd > ${half1[$i]}--$node-2-rpctest.log" &
+               ssh -n $node "$cmd > ${log/rpctest/2-rpctest}" &
                clients+=" $!" #catch this client PID
             fi
             [[ -n "$DBG" ]] && { jobs -l; jobs -p; }
@@ -210,29 +212,40 @@ for node in "${half2[@]}"; do #Loop over all clients
          #$iperfbin -w 16K #16K window size MapR uses
          if [[ $procs -gt 1 ]]; then
             cmd="$taskset $numanode1 $iperfbin -c ${half1[$i]} -t 30 -P$xtra"
-            ssh -n $node "$cmd -p $port2 >${half1[$i]}--$node-$port2-iperf.log"&
+            ssh -n $node "$cmd -p $port2 > ${log/iperf/$port2-iperf/}" &
          fi
          cmd="$taskset $numanode0 $iperfbin -c ${half1[$i]} -t 30 -P$xtra"
-         ssh -n $node "$cmd > ${half1[$i]}--$node-iperf.log"
-         tail ${half1[$i]}---$node-iperf.log
+         ssh $node "$cmd > $log"
       else
+         log="${half1[$i]}--$node-rpctest.log"
          if [[ $multinic == "true" ]]; then
             cmd="$rpctestbin -client -b 32 $size ${multinics[$i]}"
-            ssh -n $node "$cmd > ${half1[$i]}--$node-rpctest.log"
+            ssh -n $node "$cmd > $log"
          else
             cmd="$rpctestbin -client -b 32 $size ${half1[$i]}"
             if [[ $procs -gt 1 ]]; then
-               ssh -n $node "$cmd > ${half1[$i]}--$node-2-rpctest.log" &
+               ssh -n $node "$cmd > ${log/rpctest/2-rpctest}" &
             fi
-            ssh -n $node "$cmd > ${half1[$i]}--$node-rpctest.log"
+            ssh -n $node "$cmd > $log"
          fi
       fi
-      echo "Test from $node to ${half1[$i]} complete"
-      log="${half1[$i]}--$node-iperf.log"
-      scmd="arp -na | awk '{print \$NF}' | sort -u | xargs -l ethtool"
-      ssh $node "$scmd | grep -e ^Settings -e Speed: >> $log"
-      scmd="arp -na | awk '{print \$NF}' | sort -u | xargs -l ifconfig"
-      ssh $node "$scmd | grep -e HWaddr -e errors -e 'inet addr:' >> $log"
+      echo; echo "Test from $node to ${half1[$i]} complete"
+      # Get NIC stats when running sequential tests
+      echo >> $log; echo >> $log
+      if type ip >& /dev/null; then
+         nics=$(ssh $node ip neigh |awk '{print $3}' |sort -u)
+         for inic in $nics; do
+            ssh $node "ethtool $inic |grep -e ^Settings -e Speed: >> $log"
+            ssh $node "ip -s link show dev $inic  >> $log"
+         done
+      else
+         gs="-e HWaddr -e errors -e 'inet addr:'"
+         nics=$(ssh $node arp -na |awk '{print $NF}' |sort -u)
+         for inic in $nics; do
+            ssh $node "ethtool $inic |grep -e ^Settings -e Speed: >> $log"
+            ssh $node "ifconfig $inic |grep $gs  >> $log"
+         done
+      fi
    fi
    ((i++))
 done
@@ -248,6 +261,7 @@ fi
 # Handle the odd numbered node count case (extra node)
 if [[ -n "$extraip" ]]; then
    [[ -n "$DBG" ]] && set -x
+   echo
    echo Measuring extra IP address, NOT a concurrent measurement
    ((i--)) #decrement to reuse last server in server list $half1
    if [[ $runiperf == "true" ]]; then
@@ -281,6 +295,7 @@ fi
 if [[ $runiperf == "true" ]]; then
    # Print the measured bandwidth (string TBD)
    for host in ${half2[@]}; do ssh $host 'grep -i -h -e ^ *-iperf.log'; done
+   echo
    echo "Theoretical Max: 1GbE=125MB/s, 10GbE=1250MB/s"
    echo "Expect 90-94% best case, 1125-1175 MB/sec on all pairs for 10GbE"
    #Kill the servers
