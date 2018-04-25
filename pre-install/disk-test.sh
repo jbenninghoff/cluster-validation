@@ -1,7 +1,7 @@
 #!/bin/bash
 # jbenninghoff 2013-Jan-06  vi: set ai et sw=3 tabstop=3:
 
-[[ $(id -u) == 0 ]] && { echo This script must be run as root; exit 1; }
+[[ $(id -u) != 0 ]] && { echo This script must be run as root; exit 1; }
 scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
 
 usage() {

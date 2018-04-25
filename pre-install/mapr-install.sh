@@ -29,7 +29,7 @@ MapR Install methods:
 Install of MapR must be done as root
 (or with passwordless sudo as mapr service account)
 
-This script requires these clush groups: clstr cldb zk rm hist [metrics]
+This script requires these clush groups: clstr cldb zk rm hist [graf otsdb]
 
 EOF
 exit 2
@@ -79,16 +79,13 @@ setvars
 chk_prereq() {
    # Check cluster for pre-requisites
    #Check for clush groups to layout services
-   for grp in clstr cldb zk rm hist; do
+   groups="clstr cldb zk rm hist"
+   [[ "$metrics" == true ]] && groups+=" graf otsdb"
+   for grp in $groups; do
       gmsg="Clustershell group: $grp undefined"
       [[ $(nodeset -c @$grp) == 0 ]] && { echo $gmsg; clushgrps=false; }
    done
    [[ "$clushgrps" == false ]] && exit 1
-
-   if [[ "$metrics" == true ]]; then
-      gmsg="Clustershell group: $metrics undefined"
-      [[ $(nodeset -c @$metrics) == 0 ]] && { echo $gmsg; exit 2; }
-   fi
 
    cldb1=$(nodeset -I0 -e @cldb) #first node in cldb group
    [[ -z "$clname" ]] && { echo Cluster name not set.  Set clname in this script; exit 2; }
@@ -97,6 +94,7 @@ chk_prereq() {
    clush -S -B -g clstr id $admin1 || { echo $admin1 account does not exist on all nodes; exit 3; }
    clush -S -B -g clstr id $mapruid || { echo $mapruid account does not exist on all nodes; exit 3; }
    clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" || { echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit; exit 3; }
+   clush -qB -g clstr 'pkill -e yum; exit 0'
    clush -S -B -g clstr 'echo "MapR Repo Check "; yum -q search mapr-core' || { echo MapR RPMs not found; exit 3; }
    #rpm --import http://package.mapr.com/releases/pub/maprgpg.key
    #clush -S -B -g clstr 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl' || { echo MapR repos not found; }
@@ -310,7 +308,7 @@ do_edge_node() {
 chk_disk_list() {
    clear
    clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
-   clush $clargs -B -g clstr 'test -f /opt/mapr/conf/disktab' && { echo MapR appears to be installed; exit 3; }
+   clush $clargs -B -g clstr 'test -f /opt/mapr/conf/disktab' >& /dev/null && { echo MapR appears to be installed; exit 3; }
    # Multiple disk lists for heterogeneous Storage Pools
    #clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous Storage Pools [$spwidth]
    #clush $clargs -B -g clstr "sed -n '11,\$p' /tmp/disk.list > /tmp/disk.list2"
@@ -318,14 +316,18 @@ chk_disk_list() {
    #clush $clargs -B -g clstr "cat /tmp/disk.list2; wc /tmp/disk.list2" || { echo /tmp/disk.list2 not found; exit 4; }
 
    cat <<EOF3
-   Assuming that all nodes have been audited with cluster-audit.sh and
-   all issues fixed.  Also assuming that all nodes have met subsystem
+
+   Ensure that all nodes have been audited with cluster-audit.sh and
+   all issues fixed.  Also ensure that all nodes have met subsystem
    performance expectations as measured by memory-test.sh, network-test.sh
-   and disk-test.sh.  Scrutinize the disk list above.  All disks will
-   be formatted for MapR FS, destroying all existing data on the disks.
-   If the disk list contains an OS disk or disk not intended for MapR
-   FS, abort this script and edit the disk-test.sh script to filter
-   the disk(s) and rerun it.
+   and disk-test.sh. 
+
+   Scrutinize the disk list above.  All disks will be formatted for
+   MapR FS, destroying all existing data on the disks.  If the disk
+   list contains an OS disk or disk not intended for MapR FS, abort
+   this script and edit the disk-test.sh script to filter the disk(s)
+   and rerun it with clush to generate new /tmp/disk.list files.
+
 EOF3
    read -p "Press enter to continue or ctrl-c to abort"
 }
