@@ -34,7 +34,6 @@ This script requires these clush groups: clstr cldb zk rm hist [graf otsdb]
 EOF
 exit 2
 }
-
 secure=false; kerberos=false; mfs=false; uninstall=false; upgrade=false
 admin=false; edge=false; metrics=false; clname=''
 while getopts "Msmuxaek:n:" opt; do
@@ -58,7 +57,7 @@ setvars() {
    # Login to web ui
    admin1='mapr' #Non-root, non-mapr linux account which has a known password
    mapruid=mapr; maprgid=mapr #MapR service account and group
-   spwidth=4 #Storage Pool width
+   spw=4 #Storage Pool width
    distro=$(cat /etc/*release 2>/dev/null | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
    maprver=v5.2.0 #TBD: Grep repo file to confirm or alter
    clargs='-S'
@@ -310,7 +309,7 @@ chk_disk_list() {
    clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
    clush $clargs -B -g clstr 'test -f /opt/mapr/conf/disktab' >& /dev/null && { echo MapR appears to be installed; exit 3; }
    # Multiple disk lists for heterogeneous Storage Pools
-   #clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous Storage Pools [$spwidth]
+   #clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous Storage Pools [$spw]
    #clush $clargs -B -g clstr "sed -n '11,\$p' /tmp/disk.list > /tmp/disk.list2"
    #clush $clargs -B -g clstr "cat /tmp/disk.list1; wc /tmp/disk.list1" || { echo /tmp/disk.list1 not found; exit 4; }
    #clush $clargs -B -g clstr "cat /tmp/disk.list2; wc /tmp/disk.list2" || { echo /tmp/disk.list2 not found; exit 4; }
@@ -389,7 +388,7 @@ post_install() {
 }
 post_install
 
-post_install_keys() {
+install_keys() {
    #Configure primary CLDB node with security keys, exit if configure.sh fails
    #TBD: Use -K and -P "mapr/clustername" to enable Kerberos $pn
    clush -S $clargs -w $cldb1 "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -S -genkeys -u $mapruid -g $maprgid -no-autostart"
@@ -409,7 +408,7 @@ post_install_keys() {
    clush $clargs -g clstr -x $cldb1 "${SUDO:-} chmod 600 /opt/mapr/conf/{ssl_keystore,maprserverticket}"
    clush $clargs -g clstr -x $cldb1 "${SUDO:-} chmod 644 /opt/mapr/conf/ssl_truststore"
 }
-[[ "$secure" == "true" ]] && post_install_keys
+[[ "$secure" == "true" ]] && install_keys
 
 configure_mapr() {
    # Configure cluster
@@ -419,7 +418,7 @@ configure_mapr() {
    [[ "$secure" == "true" ]] && confopts+=" -S"
    [[ "$metrics" == "true" ]] && confopts+=" -OT $(nodeset -S, -e @otsdb)"
 
-   clush -S $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh $confopts"
+   clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh $confopts"
    if [[ $? -ne 0 ]]; then
       echo configure.sh failed, check screen and /opt/mapr/logs for errors
       exit 2
@@ -427,13 +426,17 @@ configure_mapr() {
 }
 configure_mapr
 
-format_start_mapr() {
-   # Set up the disks and start the cluster
-   #clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/disksetup -W 5 /tmp/disk.list1
-   #clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/disksetup -W 6 /tmp/disk.list2
+format_disks() {
    disks=/tmp/disk.list
-   clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/disksetup -W $spwidth $disks"
+   clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/disksetup -W $spw $disks"
+   if [[ $? -ne 0 ]]; then
+      echo disksetup failed, check terminal and /opt/mapr/logs for errors
+      exit 3
+   fi
+}
+format_disks
 
+start_mapr() {
    clush $clargs -g zk "${SUDO:-} service mapr-zookeeper start"
    clush $clargs -g clstr "${SUDO:-} service mapr-warden start"
 
@@ -447,7 +450,7 @@ format_start_mapr() {
       sleep .3
    done # Spinner from StackOverflow
 }
-format_start_mapr
+start_mapr
 
 chk_acl_lic() {
    #TBD: Handle mapruid install
@@ -474,17 +477,18 @@ chk_acl_lic() {
    with license installation:
    Webserver nodes: $(nodeset -S, -e @cldb)
 
-   Alternatively, license can be installed with maprcli like this:
-   You can use any browser to connect to mapr.com, in the upper right
-   corner there is a login link.  login and register if you have not
-   already.  Once logged in, you can use the register button on the
-   right of your login page to register a cluster by just entering a
-   clusterid.
-   You can get the cluster id with maprcli like this:
+   Alternatively, the license can be installed with maprcli.
+   First, get the cluster id with maprcli like this:
+
    maprcli dashboard info -json |grep -e id -e name
                    "name":"ps",
                    "id":"5681466578299529065",
 
+   Then you can use any browser to connect to http://mapr.com/. In the
+   upper right corner there is a login link.  login and register if you
+   have not already.  Once logged in, you can use the register button on
+   the right of your login page to register a cluster by just entering
+   a clusterid.
    Once you finish the register form, you will get back a license which
    you can copy and paste to a file on the same node you ran maprcli.
    Use that file as filename in the following maprcli command:
