@@ -35,7 +35,7 @@ EOF
 exit 2
 }
 secure=false; kerberos=false; mfs=false; uninstall=false; upgrade=false
-admin=false; edge=false; metrics=false; clname=''
+admin=false; edge=false; metrics=false; clname=''; logsearch=false
 while getopts "Msmuxaek:n:" opt; do
   case $opt in
     M) metrics=true ;;
@@ -54,8 +54,9 @@ done
 setvars() {
    ########## Site specific variables
    clname=${clname:-''} #Name for the entire cluster, no spaces
+   realm=""
    # Login to web ui
-   admin1='mapr' #Non-root, non-mapr linux account which has a known password
+   admin1='' #Non-root, non-mapr linux account which has a known password
    mapruid=mapr; maprgid=mapr #MapR service account and group
    spw=4 #Storage Pool width
    distro=$(cat /etc/*release 2>/dev/null | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
@@ -67,17 +68,17 @@ setvars() {
    # all clush/ssh cmds will forward setting in ~/.ssh/environment
    (umask 0077 && echo JAVA_HOME=$JAVA_HOME >> $HOME/.ssh/environment)
    #If not root use sudo, assuming mapr account has password-less sudo
-   [ $(id -u) -ne 0 ] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH '
+   [[ $(id -u) -ne 0 ]] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH '
    # If root has mapr public key on all nodes
    #clush() { /Users/jbenninghoff/bin/clush -l root $@; }
    clushgrps=true
-   [ $(id -u) -ne 0 -a $(id -un) != "$mapruid" ] && { echo This script must be run as root or $maprid; exit 1; }
+   [ $(id -u) -ne 0 -a $(id -un) != "$mapruid" ] && { echo This script must be run as root or $mapruid; exit 1; }
 }
 setvars
 
 chk_prereq() {
    # Check cluster for pre-requisites
-   #Check for clush groups to layout services
+   # Check for clush groups to layout services
    groups="clstr cldb zk rm hist"
    [[ "$metrics" == true ]] && groups+=" graf otsdb"
    for grp in $groups; do
@@ -86,15 +87,27 @@ chk_prereq() {
    done
    [[ "$clushgrps" == false ]] && exit 1
 
-   cldb1=$(nodeset -I0 -e @cldb) #first node in cldb group
    [[ -z "$clname" ]] && { echo Cluster name not set.  Set clname in this script; exit 2; }
+   if [[ "$kerberos" == true && $realm == "" ]]; then
+      echo Kerberos Realm not set.  Set realm var in this script.
+      exit 2
+   fi
    [[ -z "$admin1" ]] && { echo Admin name not set.  Set admin1 in this script; exit 2; }
+   cldb1=$(nodeset -I0 -e @cldb) #first node in cldb group
    [[ -z "$cldb1" ]] && { echo Primary node name not set.  Set or check cldb1 in this script; exit 2; }
    clush -S -B -g clstr id $admin1 || { echo $admin1 account does not exist on all nodes; exit 3; }
    clush -S -B -g clstr id $mapruid || { echo $mapruid account does not exist on all nodes; exit 3; }
-   clush -S -B -g clstr "$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit" || { echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit; exit 3; }
+   if [[ "$admin1" != "$mapruid" ]]; then
+      clush -S -B -g clstr id $admin1 || \
+         { echo $admin1 account does not exist on all nodes; exit 3; }
+   fi
+   clush -S -B -g clstr "$JAVA_HOME/bin/java -version \
+      |& grep -e x86_64 -e 64-Bit -e version" || \
+      { echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit; \
+      exit 3; }
    clush -qB -g clstr 'pkill -e yum; exit 0'
    clush -S -B -g clstr 'echo "MapR Repo Check "; yum -q search mapr-core' || { echo MapR RPMs not found; exit 3; }
+   clush -S -B -g clstr 'echo "MapR Repo URL "; yum repoinfo mapr-core\* |grep baseurl'
    #rpm --import http://package.mapr.com/releases/pub/maprgpg.key
    #clush -S -B -g clstr 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl' || { echo MapR repos not found; }
    #clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
@@ -367,18 +380,20 @@ install_metrics() {
 }
 [[ "$metrics" == true ]] && install_metrics
 
-install_logmon() {
+install_logsearch() {
    clush $clargs -g clstr "${SUDO:-} yum -y install mapr-fluentd"
-   clush $clargs -g clstr "${SUDO:-} yum -y install mapr-elasticsearch"
-   clush $clargs -g kiba "${SUDO:-} yum -y install mapr-kibana"
+   clush $clargs -g es "${SUDO:-} yum -y install mapr-elasticsearch"
+   clush $clargs -g kibana "${SUDO:-} yum -y install mapr-kibana"
 }
+[[ "$logsearch" == true ]] && install_logsearch
 
 install_patch
 
 post_install() {
    # Set JAVA_HOME in env.sh after MapR rpms are installed
-   sedcmd="'s,^#export JAVA_HOME=,export JAVA_HOME=$JAVA_HOME,'"
-   clush $clargs -g clstr "${SUDO:-} sed -i.bk $sedcmd /opt/mapr/conf/env.sh"
+   # First rely on env.sh to find $JAVA_HOME, uncomment if it fails
+   #sedcmd="'s,^#export JAVA_HOME=,export JAVA_HOME=$JAVA_HOME,'"
+   #clush $clargs -g clstr "${SUDO:-} sed -i.bk $sedcmd /opt/mapr/conf/env.sh"
 
    # Create MapR fstab
    fstab='localhost:/mapr /mapr hard,intr,nolock,noatime'
@@ -389,26 +404,38 @@ post_install() {
 post_install
 
 install_keys() {
-   #Configure primary CLDB node with security keys, exit if configure.sh fails
-   #TBD: Use -K and -P "mapr/clustername" to enable Kerberos $pn
-   clush -S $clargs -w $cldb1 "${SUDO:-} /opt/mapr/server/configure.sh -N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) -S -genkeys -u $mapruid -g $maprgid -no-autostart"
-   [ $? -ne 0 ] && { echo configure.sh failed, check screen and $cldb1:/opt/mapr/logs for errors; exit 2; }
+   # Generate keys using primary CLDB node
+   clcmd="/opt/mapr/server/configure.sh -N $clname "
+   clcmd+=" -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) "
+   clcmd+=" -S -genkeys -u $mapruid -g $maprgid -no-autostart "
+   [[ "$kerberos" == "true" ]] && clcmd+=" -K -P $mapruid/$clname@$realm"
+   clush -S $clargs -w $cldb1 "${SUDO:-} $clcmd"
+   if [[ $? -ne 0 ]]; then
+      echo configure.sh failed
+      echo ${SUDO:-} $clcmd
+      echo check screen and $cldb1:/opt/mapr/logs for errors
+      exit 2
+   fi
 
-   #pull a copy of the keys
-   scp "$cldb1:/opt/mapr/conf/{cldb.key,ssl_truststore,ssl_keystore,maprserverticket}" .
-   #Handle key copy with sudo/dd?
-   clush -g cldb,zk -x $cldb1 -c cldb.key --dest /opt/mapr/conf/
-   clush $clargs -g cldb,zk -x $cldb1 "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/cldb.key"
-   clush $clargs -g cldb,zk -x $cldb1 "${SUDO:-} chmod 600 /opt/mapr/conf/cldb.key"
+   # Pull a copy of the keys from first CLDB node, then push to all nodes
+   for file in cldb.key ssl_truststore ssl_keystore maprserverticket; do
+      ssh $cldb1 dd if=/opt/mapr/conf/$file > $file
+      ddcmd="dd of=/opt/mapr/conf/$file status=none"
+      cat $file |clush $clargs -g clstr "${SUDO:-} $ddcmd"
+   done
 
-   clush -g clstr -x $cldb1 -c ssl_truststore --dest /opt/mapr/conf/
-   clush -g clstr -x $cldb1 -c ssl_keystore --dest /opt/mapr/conf/
-   clush -g clstr -x $cldb1 -c maprserverticket --dest /opt/mapr/conf/
-   clush $clargs -g clstr -x $cldb1 "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}"
-   clush $clargs -g clstr -x $cldb1 "${SUDO:-} chmod 600 /opt/mapr/conf/{ssl_keystore,maprserverticket}"
-   clush $clargs -g clstr -x $cldb1 "${SUDO:-} chmod 644 /opt/mapr/conf/ssl_truststore"
+   # Set owner and permissions on all key files pushed out
+   clush $clargs -g clstr "${SUDO:-} chmod 600 /opt/mapr/conf/cldb.key"
+   clcmd="chown $mapruid:$maprgid "
+   clcmd+="/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}"
+   clush $clargs -g clstr "${SUDO:-} $clcmd"
+   clcmd="chmod 600 /opt/mapr/conf/{ssl_keystore,maprserverticket}"
+   clush $clargs -g clstr "${SUDO:-} $clcmd"
+   clcmd="chmod 644 /opt/mapr/conf/ssl_truststore"
+   clush $clargs -g clstr "${SUDO:-} $clcmd"
 }
 [[ "$secure" == "true" ]] && install_keys
+
 
 configure_mapr() {
    # Configure cluster
@@ -417,6 +444,7 @@ configure_mapr() {
    confopts+="-HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart"
    [[ "$secure" == "true" ]] && confopts+=" -S"
    [[ "$metrics" == "true" ]] && confopts+=" -OT $(nodeset -S, -e @otsdb)"
+   [[ "$kerberos" == "true" ]] && confopts+=" -K -P $mapruid/$clname@$realm"
 
    clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh $confopts"
    if [[ $? -ne 0 ]]; then
@@ -428,7 +456,8 @@ configure_mapr
 
 format_disks() {
    disks=/tmp/disk.list
-   clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/disksetup -W $spw $disks"
+   dargs="-F -W $spw"
+   clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/disksetup $dargs $disks"
    if [[ $? -ne 0 ]]; then
       echo disksetup failed, check terminal and /opt/mapr/logs for errors
       exit 3
@@ -449,6 +478,9 @@ start_mapr() {
       sp=${sp#?}${sp%???}
       sleep .3
    done # Spinner from StackOverflow
+
+   t2=$SECONDS; echo -n "Duration time for installation: "
+   date -u -d @$((t2 - t1)) +"%T"
 }
 start_mapr
 

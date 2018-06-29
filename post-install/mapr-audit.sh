@@ -152,14 +152,28 @@ cluster_checks2() {
       clush $parg "echo 'MR2 yarn-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/yarn-site.xml"; echo $sep
       hadoop conf-details print-all-effective-properties |grep central-logging
    fi
-   clush $parg "echo 'MapR Central Configuration Setting'; grep centralconfig /opt/mapr/conf/warden.conf"; echo $sep
+   msg="MapR Central Configuration Setting"
+   clush $parg "echo $msg; grep centralconfig /opt/mapr/conf/warden.conf"
+   echo $sep
    clush $parg "echo 'MapR Roles Per Host'; ls /opt/mapr/roles"; echo $sep
-   #clush $parg "echo 'MapR Directories'; find /opt/mapr -maxdepth 1 -type d |sort"; echo $sep
+   cmd="find /opt/mapr -maxdepth 1 -type d |sort"
+   #clush $parg "echo 'MapR Directories'; $cmd"; echo $sep
    msg="MapR System Stats "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    ${node:-} maprcli node list -columns hostname,cpus,mused; echo $sep
-   msg="Customer Site Specific Volumes "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   ${node:-} maprcli volume list -filter "[n!=mapr.*] and [n!=*local*]" -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
+   msg="Customer Site Specific Volumes "
+   printf "%s%s \n" "$msg" "${sep:${#msg}}"
+   opts='-filter "[n!=mapr.*] and [n!=*local*]"'
+   opts+=' -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed'
+   eval ${node:-} maprcli volume list "$opts"; echo $sep
    echo
+   #if (type -p jq >/dev/null); then
+   #TBD: get history server hostname/ip, get 1-3 days history and log it.
+   #hist=$(maprcli node list -columns svc |awk '/historyserver/ {print $1}')
+   #begin=$(( ($(date +%s) - 86400*3) * 1000 ))
+   #url="https://$hist:19890/ws/v1/history/mapreduce/jobs"
+   #url+="?startedTimeBegin=$begin"
+   #curl -s -u mapr:mapr -k "$url"
+   #curl -s -u mapr:mapr -k "$url" |jq
 }
 
 edgenode_checks() {

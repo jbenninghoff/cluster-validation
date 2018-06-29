@@ -70,7 +70,9 @@ else
    clush() { eval "$@"; } #clush becomes no-op, all commands run locally doing a single node inspection
    #clush() { for h in $(<~/host.list); do; ssh $h $@; done; } #ssh in for loop
 fi
-[ -n "$DBG" ] && { clush $parg $parg1 ${parg3/0 /} date || { echo clush failed; usage; exit 3; }; }
+if [[ -n "$DBG" ]]; then
+   clush $parg $parg1 ${parg3/0 /} date || { echo clush failed; usage; exit 3; }
+fi
 
 # Locate or guess MapR Service Account
 if [[ -f /opt/mapr/conf/daemon.conf ]]; then
@@ -86,24 +88,30 @@ if [[ $(id -u) -ne 0 && "$cluser" != "-l root" ]]; then
       read -s -e -p 'Enter sudo password: ' mypasswd
       #echo $mypasswd | sudo -S -i dmidecode -t bios || exit
       SUDO="echo $mypasswd | sudo -S -i "
+      # sudo -ln can say pw required when it isn't required
    else
       SUDO='sudo PATH=/sbin:/usr/sbin:$PATH '
    fi
-   if (clush $narg $parg1 "${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers" >& /dev/null); then
+   gs="'^Defaults.*requiretty'"
+   if (clush $narg $parg1 "${SUDO:-} grep -q $gs /etc/sudoers" >&/dev/null);then
       parg="-o -qtt $parg" # Add -qtt for sudo tty via ssh/clush
-      #echo Use: clush -ab -o -qtt "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"  To run sudo without a tty
+      #echo Use: clush -ab -o -qtt "sudo sed -i.bak
+      #'/^Defaults.*requiretty/s/^/#/' /etc/sudoers"
+      #To run sudo without a tty
    fi
 fi
 
 # Check for systemd and basic RPMs
-sysd=$(clush $parg4 "[ -f /etc/systemd/system.conf ]" && echo true || echo false )
+clcmd="[ -f /etc/systemd/system.conf ]"
+sysd=$(clush $parg4 "$clcmd" && echo true || echo false)
 rpms="pciutils dmidecode net-tools ethtool "
 case $distro in
    redhat|centos|red*|sles)
    rpms+="bind-utils "
    if ! clush $parg $parg1 "rpm -q $rpms >/dev/null"; then
       echo Essential RPMs required for audit not installed!
-      echo "Install packages on all nodes with clush: clush -ab 'yum -y install $rpms'"
+      echo "Install packages on all nodes with clush:"
+      echo "clush -ab 'yum -y install $rpms'"
       exit
    fi
    ;;
@@ -111,7 +119,8 @@ case $distro in
    rpms+="bind9utils "
    if ! clush $parg $parg1 "dpkg -l $rpms >/dev/null"; then
       echo Essential packages required for audit not installed!
-      echo "Install packages on all nodes with clush: clush -ab 'apt-get -y install $rpms'"
+      echo "Install packages on all nodes with clush:"
+      echo "clush -ab 'apt-get -y install $rpms'"
       exit
    fi
    ;;
@@ -310,12 +319,12 @@ elif [[ $(id -un) == $srvid ]]; then
    echo Check for $srvid users java exec permission and version
    clush $parg $parg2 "echo -n 'Java version: '; java -version"; echo $sep
    echo "Check for $srvid passwordless ssh (only for MapR v3.x)"
-   clush $parg "ls ~$srvid/.ssh/authorized_keys\*"; echo $sep
+   clush $parg "ls ~$srvid/.ssh/authorized_keys*"; echo $sep
 else
    echo Must have root access or sudo rights to check $srvid limits
 fi
 echo Check for system wide nproc and nofile limits
-clush $parg "${SUDO:-} [[ -d /etc/security/limits.d ]] && { grep -e nproc -e nofile /etc/security/limits.d/*.conf |grep -v ':#'; } || exit 0"
+clush $parg "${SUDO:-} test -d /etc/security/limits.d && { grep -e nproc -e nofile /etc/security/limits.d/*.conf |grep -v ':#'; } || exit 0"
 clush $parg "${SUDO:-} grep -e nproc -e nofile /etc/security/limits.conf |grep -v ':#' "; echo $sep
 #echo 'Check for root user login and passwordless ssh (not needed for MapR, just easy for clush)'
 #clush $parg "echo 'Root login '; getent passwd root && { ${SUDO:-} echo ~root/.ssh; ${SUDO:-} ls ~root/.ssh; }"; echo $sep

@@ -22,7 +22,7 @@ EOF
 
 }
 
-dbug=false; fact=1; sizes=false; preserve=false; volume=local; compression=true
+dbg=false; fact=1; sizes=false; preserve=false; volume=local; compression=true
 while getopts "nrpdsx:" opt; do
    case $opt in
       n) compression=false ;;
@@ -35,25 +35,34 @@ while getopts "nrpdsx:" opt; do
       *) usage; exit 3 ;;
    esac
 done
-[ $(id -un) != mapr -a $(id -u) -ne 0 ] && { echo This script must be run as root or mapr; exit 1; }
 
+mapracct=$(stat -c "%U" /opt/mapr/conf/mapruserticket)
 tmpfile=$(mktemp); trap "rm $tmpfile; echo EXIT sigspec: $?; exit" EXIT
 localvol=localvol-$(hostname -s)
 MAPR_HOME=${MAPR_HOME:-/opt/mapr}
+if [[ $(id -un) != $mapracct && $(id -u) -ne 0 ]]; then
+   echo This script must be run as root or mapr; exit 1
+fi
+
+#Check if folder exists and clear it out
+if hadoop fs -stat /$localvol >& /dev/null; then
+   hadoop fs -rm -r /$localvol/\*
+fi
+#TBD: ! maprcli volume info -name $localvol > /dev/null #vol exists?
 
 if [[ $volume == "regular" ]]; then
-   localvol=mfs-benchmarks-$(hostname -s)
    # Make regular volume configured with replication 3 and compression off
-   maprcli volume create -name $localvol -path /$localvol -replication 3 -topology /data/default-rack
-   hadoop fs -rm -r /$localvol/\* >/dev/null
-   hadoop mfs -setcompression off /$localvol
-elif ! maprcli volume info -name $localvol > /dev/null; then # If volume doesn't exist already
-   hadoop fs -stat /$localvol #Check if folder exists
-   # Make local volume configured with replication 1 and compression off
-   maprcli volume create -name $localvol -path /$localvol -replication 1 -localvolumehost $(<$MAPR_HOME/hostname)
-   hadoop mfs -setcompression off /$localvol
+   regvol=mfs-benchmarks-$(hostname -s)
+   opts="-name $regvol -path /$regvol -replication 3"
+   opts+=" -topology /data/default-rack"
+   maprcli volume create "$opts"
+   hadoop fs -rm -r /$regvol/\* >/dev/null
+   hadoop mfs -setcompression off /$regvol
 else
-   hadoop fs -rm -r /$localvol/\*
+   # Make local volume configured with replication 1 and compression off
+   opts="-name $localvol -path /$localvol -replication 1 "
+   opts+=" -localvolumehost $(<$MAPR_HOME/hostname)"
+   maprcli volume create "$opts"
    hadoop mfs -setcompression off /$localvol
 fi
 
@@ -61,7 +70,8 @@ fi
 MFS_TEST_JAR=$(find $MAPR_HOME/lib -name maprfs-diagnostic-tools-\*.jar)
 
 #set number of Java processes to the number of data drives
-ndisk=$(/opt/mapr/server/mrconfig sp list -v | grep -o '/dev/[^ ,]*' | sort -u | wc -l)
+pcmd="grep -o '/dev/[^ ,]*' | sort -u | wc -l"
+ndisk=$(/opt/mapr/server/mrconfig sp list -v | "$pcmd")
 #(( ndisk=ndisk*2 )) #Modify the process count if need be
 echo ndisk: $ndisk
 echo
@@ -77,7 +87,8 @@ fsize=$(/opt/mapr/server/mrconfig sp list | awk '/totalfree/{print $9}')
 # Use 1% of available space
 (( fsize=(fsize/100) )) 
 # Divide by the number of processes that wil be run to set the file size
-(( fsize=(fsize/(${fact:-1}*ndisk) ) )) # TBD: Check if big enough to exceed MFS cache
+(( fsize=(fsize/(${fact:-1}*ndisk) ) ))
+# TBD: Check if $fsize is big enough to exceed MFS cache
 echo Num processes: $ndisk
 echo File size set to $fsize MB; echo
 #read -p "Press enter to continue or ctrl-c to abort"
@@ -85,7 +96,8 @@ echo File size set to $fsize MB; echo
 # Usage: RWSpeedTest filename [-]megabytes uri
 # A simple single core (1 process) test to verify node if needed
 if [ -n "$dbg" ]; then
-   hadoop jar $MFS_TEST_JAR com.mapr.fs.RWSpeedTest /$localvol/RWTestSingleTest $fsize maprfs:///
+   opts="/$localvol/RWTestSingleTest $fsize maprfs:///"
+   hadoop jar $MFS_TEST_JAR com.mapr.fs.RWSpeedTest "$opts"
    exit
 fi
 

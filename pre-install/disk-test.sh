@@ -45,7 +45,8 @@ while getopts "pasdrz:-:" opt; do
     s) seq=true ;;
     r) testtype=readtest ;;
     p) preserve=true ;;
-    z) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && size=$OPTARG || { echo $OPTARG is not an number; exit; } ;;
+    z) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && size=$OPTARG
+       [[ "$OPTARG" =~ ^[0-9.]+$ ]] || { echo $OPTARG is not a number;exit; } ;;
     d) DBG=true ;; # Enable debug statements
     *) usage ;;
   esac
@@ -189,7 +190,7 @@ case "$testtype" in
          exit
       fi
       #tar up previous log files
-      files=$(ls *-{dd,iozone}.log 2>/dev/null)
+      files=$(ls ./*-{dd,iozone}.log 2>/dev/null)
       if [[ -n "$files" ]]; then
          tar czf disk-tests-$(date "+%FT%T" |tr : .).tgz $files
          rm -f $files

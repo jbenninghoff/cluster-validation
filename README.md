@@ -133,7 +133,7 @@ list of unused disks.  After carefully examining this list, run
 again with --destroy as the argument ('disk-test.sh --destroy') 
 to run the destructive IOzone tests on all unused disks.
 
-The test can be run in parallel on all nodes with:
+The test can be run in parallel on all nodes with clush:
 
     cd /root/cluster-validation/
     clush -ab "$PWD/pre-install/disk-test.sh"
