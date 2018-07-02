@@ -11,14 +11,16 @@
 
 # Remove and recreate a MapR volume just for benchmarking, best if run only once
 # Use replication 1 to get peak write performance
-if maprcli volume info -name benchmarks > /dev/null; then #If benchmarks volume exists
-   maprcli volume unmount -name benchmarks
-   maprcli volume remove -name benchmarks
+if maprcli volume info -name benchmarks1x > /dev/null; then #If benchmarks volume exists
+   maprcli volume unmount -name benchmarks1x
+   maprcli volume remove -name benchmarks1x
    sleep 2
 fi
-#hadoop fs -stat /benchmarks #Check if folder exists and ... TBD
-maprcli volume create -name benchmarks -path /benchmarks -replication 1 # use -topology /data... if desired
+maprcli volume create -name benchmarks1x -path /benchmarks1x -replication 1 # use -topology /data... if desired
+hadoop fs -chmod 777 /benchmarks1x #open the folder up for all to use
+hadoop fs -mkdir -p /benchmarks #Check if folder exists and ... TBD
 hadoop fs -chmod 777 /benchmarks #open the folder up for all to use
+#hadoop fs -stat /benchmarks #Check if folder exists and ... TBD
 #hadoop mfs -setcompression off /benchmarks #compression may help but not allowed by sortbenchmark.org
 #hadoop mfs -setchunksize $[512*1024*1024] /benchmarks  #default 256MB, optimal chunksize determined by cluster size
 
