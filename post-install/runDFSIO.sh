@@ -1,23 +1,25 @@
 #!/bin/bash
 # jbenninghoff 2013-Apr-08  vi: set ai et sw=3 tabstop=3:
 #
-# DFSIO creates a directory TestDFSIO within /benchmarks in the 
-# distributed file system.   You'll want "/benchmarks" to be its own
-# volume (see mkbenchmarksvol.sh)
+# This test will create <n> files of size <fsize>, where <n> is defined as
+#  Number of total disk available in the cluster (for YARN clusters), OR
+#  Number of Map Slots (for MapReduce Version 1 clusters)
+# fsize is defined as 250MB to avoid file sharding due to chunksize
 #
-# Test will create <n> files of size <fsize>, where <n> is defined as
-#  Number of Map Slots (for MapReduce Version 1 clusters), OR
-#  Number of total disk available in the cluster (for YARN clusters)
+# For YARN clusters, the first arg to the script becomes a multiplier of files.
+# This arg can be used to find the maximum throughput per map task
 #
-# For YARN clusters, the xtra parameter filesPerDisk enables 
-# multiple map containers to be launched against the individual 
-# NodeManagers (scaled so the the same volume of data is tested).
-# Effectively, the "fsize" argument becomes a "bytesPerDisk" arg
-# for YARN clusters.
+# The output is appended to a TestDFSIO.log file for all runs.  The
+# key metrics reported are elapsed time and throughput (per map task).
+#
+# DFSIO creates a directory TestDFSIO under /benchmarks in the 
+# distributed file system.   The folder "/benchmarks" can be its own
+# volume in MapR (see mkBMvol.sh)
 
 MRV=$(hadoop version | awk 'NR==1{printf("%1.1s\n",$2)}')
 # Size of files to be written (in MB)
-fsize=400
+fsize=250
+filesPerDisk=${1:-1}
 
 if [ $MRV == "2" ] ; then
    hadooppath=$(ls -c1 -d /opt/mapr/hadoop/hadoop-* |sort -n |tail -1)
@@ -25,38 +27,40 @@ if [ $MRV == "2" ] ; then
    jarpath+="hadoop-mapreduce-client-jobclient-${hadoopver}*-tests.jar"
    jarpath=$(eval ls $jarpath)
    hadoopver=${hadooppath#*/hadoop-}
-   ccmd="/opt/mapr/server/mrconfig sp list -v "
-   ccmd+=" |grep -o '/dev/[^ ,]*' | sort -u | wc -l"
-   tdisks=$(clush -aN "$ccmd" |awk '{ndisks+=$1}; END{print ndisks}')
-   #tdisks=$(clush -aN "/opt/mapr/server/mrconfig sp list -v |$gcmd" |awk $acmd)
-   #tdisks=$(maprcli dashboard info -json |grep total_disks |egrep -o '[0-9]+\.[0-9]+' |awk '{print int($1+0.5)}')
-   # Use "mapreduce" properties to force <N> containers per available disk
-   # Default is 1 (so map.disk=1 and nrFiles is tdisks*1 )
-   # The intent is to create one 'wave' of map tasks with max containers per node utilized
-   filesPerDisk=${1:-1}
-   mapDisk=$(echo "scale=2; 1 / $filesPerDisk" | bc)
-   echo Number of disks per Map task: $mapDisk
-   echo tdisks: $tdisks; echo filesPerDisk: $filesPerDisk
+
+   clcmd="/opt/mapr/server/mrconfig sp list -v "
+   clcmd+=" |grep -o '/dev/[^ ,]*' | sort -u | wc -l"
+   tdisks=$(clush -aN "$clcmd" |awk '{ndisks+=$1}; END{print ndisks}')
+   tdisks=$(( $tdisks * $filesPerDisk ))
+   mapDisks=$(echo "scale=2; 1 / $filesPerDisk" | bc)
+   echo Number of disks per Map task: $mapDisks
+   echo tdisks: $tdisks; echo filesPerDisk: $filesPerDisk; echo fsize: $fsize
    read -p "Press enter to continue or ctrl-c to abort" 
+
+   # Use "mapreduce" properties to force <N> containers per available disk
+   # Default is 1 container/disk (so map.disk=1 and nrFiles is tdisks*1 )
+   # The intent is to create one 'wave' of map tasks with max containers
+   # per node utilized.  More than 1 container/disk can be specified to
+   # discover peak cluster throughput
    hadoop jar $jarpath TestDFSIO \
       -Dmapreduce.job.name=DFSIO-write \
       -Dmapreduce.map.cpu.vcores=0 \
       -Dmapreduce.map.memory.mb=768 \
-      -Dmapreduce.map.disk=${mapDisk:-1} \
+      -Dmapreduce.map.disk=${mapDisks:-1} \
       -Dmapreduce.map.speculative=false \
       -Dmapreduce.reduce.speculative=false \
-      -write -nrFiles $[$tdisks * $filesPerDisk] \
-      -fileSize $[fsize * ${1:-2}]  -bufferSize 65536
+      -write -nrFiles $tdisks \
+      -fileSize $fsize  -bufferSize 65536
 
    hadoop jar $jarpath TestDFSIO \
       -Dmapreduce.job.name=DFSIO-read \
       -Dmapreduce.map.cpu.vcores=0 \
       -Dmapreduce.map.memory.mb=768 \
-      -Dmapreduce.map.disk=${mapDisk:-1} \
+      -Dmapreduce.map.disk=${mapDisks:-1} \
       -Dmapreduce.map.speculative=false \
       -Dmapreduce.reduce.speculative=false \
-      -read -nrFiles $[tdisks * $filesPerDisk] \
-      -fileSize $[fsize * ${1:-2}]  -bufferSize 65536
+      -read -nrFiles $tdisks \
+      -fileSize $fsize  -bufferSize 65536
 
 # Optional settings to ratchet down memory consumption
 #     -Dmapreduce.map.memory.mb=768       # default 1024

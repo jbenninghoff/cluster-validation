@@ -34,6 +34,7 @@ This script requires these clush groups: clstr cldb zk rm hist [graf otsdb]
 EOF
 exit 2
 }
+
 secure=false; kerberos=false; mfs=false; uninstall=false; upgrade=false
 admin=false; edge=false; metrics=false; clname=''; logsearch=false
 while getopts "Msmuxaek:n:" opt; do
@@ -51,16 +52,25 @@ while getopts "Msmuxaek:n:" opt; do
   esac
 done
 
+# Report unknown arguments and exit
+shift $(( OPTIND - 1 ))
+if [[ $# > 0 ]]; then
+   echo Unknown option or argument 1: $1
+   echo Unknown option or argument 2: $2
+   exit
+fi
+
 setvars() {
    ########## Site specific variables
    clname=${clname:-''} #Name for the entire cluster, no spaces
    realm=""
-   # Login to web ui
-   admin1='' #Non-root, non-mapr linux account which has a known password
+   # Login to web ui; use non-root, non-mapr account to create "hadoop admin"`
+   admin1='mapr' #Non-root, non-mapr linux account which has a known password
    mapruid=mapr; maprgid=mapr #MapR service account and group
    spw=4 #Storage Pool width
-   distro=$(cat /etc/*release 2>/dev/null | grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
-   maprver=v5.2.0 #TBD: Grep repo file to confirm or alter
+   gcmd="grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos"
+   distro=$(cat /etc/*release 2>/dev/null | "$gcmd") || distro=centos
+   maprver=v6.0.1 #TBD: Grep repo file to confirm or alter
    clargs='-S'
    #export JAVA_HOME=/usr/java/default #Oracle JDK
    export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
@@ -71,8 +81,10 @@ setvars() {
    [[ $(id -u) -ne 0 ]] && SUDO='sudo PATH=/sbin:/usr/sbin:$PATH '
    # If root has mapr public key on all nodes
    #clush() { /Users/jbenninghoff/bin/clush -l root $@; }
-   clushgrps=true
-   [ $(id -u) -ne 0 -a $(id -un) != "$mapruid" ] && { echo This script must be run as root or $mapruid; exit 1; }
+   if [ $(id -u) -ne 0 -a $(id -un) != "$mapruid" ]; then
+      echo This script must be run as root or $mapruid
+      exit 1
+   fi
 }
 setvars
 
@@ -81,20 +93,28 @@ chk_prereq() {
    # Check for clush groups to layout services
    groups="clstr cldb zk rm hist"
    [[ "$metrics" == true ]] && groups+=" graf otsdb"
+   clushgrps=true
    for grp in $groups; do
       gmsg="Clustershell group: $grp undefined"
       [[ $(nodeset -c @$grp) == 0 ]] && { echo $gmsg; clushgrps=false; }
    done
    [[ "$clushgrps" == false ]] && exit 1
 
-   [[ -z "$clname" ]] && { echo Cluster name not set.  Set clname in this script; exit 2; }
+   if [[ -z "$clname" ]]; then
+      echo Cluster name not set.  Use -n option to set cluster name
+      exit 2
+   fi
    if [[ "$kerberos" == true && $realm == "" ]]; then
       echo Kerberos Realm not set.  Set realm var in this script.
       exit 2
    fi
-   [[ -z "$admin1" ]] && { echo Admin name not set.  Set admin1 in this script; exit 2; }
    cldb1=$(nodeset -I0 -e @cldb) #first node in cldb group
-   [[ -z "$cldb1" ]] && { echo Primary node name not set.  Set or check cldb1 in this script; exit 2; }
+   if [[ -z "$cldb1" ]]; then
+      echo Primary node name not set.
+      echo Set or check cldb1 variable in this script
+      nodeset -I0 -e @cldb
+      exit 2
+   fi
    clush -S -B -g clstr id $admin1 || { echo $admin1 account does not exist on all nodes; exit 3; }
    clush -S -B -g clstr id $mapruid || { echo $mapruid account does not exist on all nodes; exit 3; }
    if [[ "$admin1" != "$mapruid" ]]; then
@@ -107,7 +127,7 @@ chk_prereq() {
       exit 3; }
    clush -qB -g clstr 'pkill -e yum; exit 0'
    clush -S -B -g clstr 'echo "MapR Repo Check "; yum -q search mapr-core' || { echo MapR RPMs not found; exit 3; }
-   clush -S -B -g clstr 'echo "MapR Repo URL "; yum repoinfo mapr-core\* |grep baseurl'
+   clush -S -B -g clstr 'echo "MapR Repo URL ";yum repoinfo mapr* |grep baseurl'
    #rpm --import http://package.mapr.com/releases/pub/maprgpg.key
    #clush -S -B -g clstr 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl' || { echo MapR repos not found; }
    #clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
@@ -133,7 +153,10 @@ install_patch() { #Find, Download and install mapr-patch version $maprver
       fi
    fi
    # If mapr-patch rpm cannot be added to local repo
-   #clush -g clstr ${SUDO:-} 'yum -y install file:///tmp/mapr-patch\*.rpm'
+   #clush -abc /tmp/mapr-patch-6.0.1.20180404222005.GA-20180626035114.x86_64.rpm
+   #clush -ab "${SUDO:-} yum -y localinstall /tmp/mapr-patch-6*.rpm"
+   #clush -ab "systemctl stop mapr-warden; systemctl stop mapr-zookeeper"
+   #clush -ab "systemctl start mapr-zookeeper; systemctl start mapr-warden"
 }
 
 do_upgrade() {
@@ -418,7 +441,9 @@ install_keys() {
    fi
 
    # Pull a copy of the keys from first CLDB node, then push to all nodes
-   for file in cldb.key ssl_truststore ssl_keystore maprserverticket; do
+   secfiles="cldb.key ssl_truststore ssl_keystore maprserverticket"
+   secfiles+="ssl_truststore.pem"
+   for file in $secfiles; do
       ssh $cldb1 dd if=/opt/mapr/conf/$file > $file
       ddcmd="dd of=/opt/mapr/conf/$file status=none"
       cat $file |clush $clargs -g clstr "${SUDO:-} $ddcmd"
@@ -426,16 +451,18 @@ install_keys() {
 
    # Set owner and permissions on all key files pushed out
    clush $clargs -g clstr "${SUDO:-} chmod 600 /opt/mapr/conf/cldb.key"
-   clcmd="chown $mapruid:$maprgid "
-   clcmd+="/opt/mapr/conf/{ssl_truststore,ssl_keystore,maprserverticket}"
+
+   secfiles="{ssl_truststore,ssl_keystore,maprserverticket,ssl_truststore.pem}"
+   clcmd="chown $mapruid:$maprgid /opt/mapr/conf/$secfiles"
    clush $clargs -g clstr "${SUDO:-} $clcmd"
-   clcmd="chmod 600 /opt/mapr/conf/{ssl_keystore,maprserverticket}"
+
+   clcmd="chmod 600 /opt/mapr/conf/$secfiles"
    clush $clargs -g clstr "${SUDO:-} $clcmd"
+
    clcmd="chmod 644 /opt/mapr/conf/ssl_truststore"
    clush $clargs -g clstr "${SUDO:-} $clcmd"
 }
 [[ "$secure" == "true" ]] && install_keys
-
 
 configure_mapr() {
    # Configure cluster
@@ -507,7 +534,7 @@ chk_acl_lic() {
    cat << LICMESG
    With a web browser, connect to one of the webservers to continue
    with license installation:
-   Webserver nodes: $(nodeset -S, -e @cldb)
+   Webserver nodes: $(nodeset -e @cldb)
 
    Alternatively, the license can be installed with maprcli.
    First, get the cluster id with maprcli like this:
