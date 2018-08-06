@@ -209,9 +209,9 @@ cluster_checks3() {
    clush $parg 'echo "MapR Disk List per Host"; maprcli disk list -output terse -system 0 -host $(hostname)'; echo $sep
    clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'; echo $sep
    #clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list '; echo $sep
-   msg="MapR Complete Volume List "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
+   msg="MapR Complete Volume List "; printf "%s%s \n" "$msg" "${sep:${#msg}}" 
    ${node:-} maprcli volume list -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo $sep
-   msg="MapR Storage Pool Details "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
+   msg="MapR Storage Pool Details "; printf "%s%s \n" "$msg" "${sep:${#msg}}" 
    ${node:-} maprcli dump balancerinfo | sort -r; echo $sep
    msg="Hadoop Configuration Variable Dump "; printf "%s%s \n" "$msg" "${sep:${#msg}}"             
    if [[ "$mrv" == "1" ]] ; then # MRv1

@@ -35,7 +35,7 @@ EOF
 exit 2
 }
 
-secure=false; kerberos=false; mfs=false; uninstall=false; upgrade=false
+secure=false; kerberos=false; mfsonly=false; uninstall=false; upgrade=false
 admin=false; edge=false; metrics=false; clname=''; logsearch=false
 while getopts "Msmuxaek:n:" opt; do
   case $opt in
@@ -43,7 +43,7 @@ while getopts "Msmuxaek:n:" opt; do
     n) clname="$OPTARG" ;;
     s) secure=true; sopt="-S" ;;
     k) kerberos=true; secure=true; sopt="-S"; pn="$OPTARG" ;;
-    m) mfs=true ;;
+    m) mfsonly=true ;;
     u) upgrade=true ;;
     x) uninstall=true ;;
     a) admin=true ;;
@@ -344,8 +344,9 @@ chk_disk_list() {
    clear
    clush $clargs -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
    clush $clargs -B -g clstr 'test -f /opt/mapr/conf/disktab' >& /dev/null && { echo MapR appears to be installed; exit 3; }
-   # Multiple disk lists for heterogeneous Storage Pools
-   #clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1" #Split disk.list for heterogeneous Storage Pools [$spw]
+
+   # Create multiple disk lists for heterogeneous Storage Pools
+   #clush $clargs -B -g clstr "sed -n '1,10p' /tmp/disk.list > /tmp/disk.list1"
    #clush $clargs -B -g clstr "sed -n '11,\$p' /tmp/disk.list > /tmp/disk.list2"
    #clush $clargs -B -g clstr "cat /tmp/disk.list1; wc /tmp/disk.list1" || { echo /tmp/disk.list1 not found; exit 4; }
    #clush $clargs -B -g clstr "cat /tmp/disk.list2; wc /tmp/disk.list2" || { echo /tmp/disk.list2 not found; exit 4; }
@@ -381,7 +382,7 @@ base_install
 install_services() {
    # service layout option #1 ====================
    # admin services layered over data nodes defined in rm and cldb groups
-   if [ "$mfs" == "false" ]; then
+   if [ "$mfsonly" == "false" ]; then
       # at least 2 rm nodes
       clush $clargs -g rm "${SUDO:-} yum -y install mapr-resourcemanager"
       #yarn history server
@@ -465,17 +466,19 @@ install_keys() {
 [[ "$secure" == "true" ]] && install_keys
 
 configure_mapr() {
-   # Configure cluster
-   # v4.1+ uses RM zeroconf, no -RM
+   # v4.1+ uses RM zeroconf, no -RM needed
    confopts="-N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) "
-   confopts+="-HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid -no-autostart"
-   [[ "$secure" == "true" ]] && confopts+=" -S"
-   [[ "$metrics" == "true" ]] && confopts+=" -OT $(nodeset -S, -e @otsdb)"
-   [[ "$kerberos" == "true" ]] && confopts+=" -K -P $mapruid/$clname@$realm"
+   confopts+=" -u $mapruid -g $maprgid -no-autostart "
+   [[ "$mfsonly" == "false" ]] && confopts+="-HS $(nodeset -I0 -e @hist) "
+   [[ "$secure" == "true" ]] && confopts+=" -S "
+   [[ "$metrics" == "true" ]] && confopts+=" -OT $(nodeset -S, -e @otsdb) "
+   [[ "$kerberos" == "true" ]] && confopts+=" -K -P $mapruid/$clname@$realm "
+   #TBD: Handle $pn and $realm
 
    clush $clargs -g clstr "${SUDO:-} /opt/mapr/server/configure.sh $confopts"
    if [[ $? -ne 0 ]]; then
-      echo configure.sh failed, check screen and /opt/mapr/logs for errors
+      echo configure.sh failed
+      echo check screen history and /opt/mapr/logs/configure.log for errors
       exit 2
    fi
 }

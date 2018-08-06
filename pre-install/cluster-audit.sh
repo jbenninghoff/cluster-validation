@@ -41,12 +41,14 @@ linuxs="-e ubuntu -e redhat -e 'red hat' -e centos -e sles"
 distro=$(cat /etc/*release |& grep -m1 -i -o "$linuxs") || distro=centos
 distro=${distro,,} #make lowercase
 #distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
+#Turn the BOKS chatter down
+export BOKS_SUDO_NO_WARNINGS=1
 
 # Check for clush and provide alt if not found
 if type clush >& /dev/null; then
    [ $(nodeset -c @${group:-all}) -gt 0 ] || { echo group: ${group:-all} does not exist; exit 2; }
    #clush specific arguments
-   parg="${cluser} -q -b -g ${group:-all}"
+   parg="${cluser} -b -g ${group:-all}"
    parg1="-S"
    parg2="-B"
    parg3="-u 30"
@@ -141,8 +143,10 @@ clush $parg "echo DMI BIOS:; ${SUDO:-} dmidecode |grep -A3 '^BIOS I'"; echo $sep
 
 # probe for cpu info ###############
 clush $parg "grep '^model name' /proc/cpuinfo | sort -u"; echo $sep
-clush $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' | awk '/^CPU MHz:/{sub(\$3,sprintf(\"%0.0f\",\$3))};{print}'"; echo $sep
-clush $parg "lscpu | grep -e ^Thread"; echo $sep
+clush $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' -e '^CPU MHz:' -e ^Flags -e cache: "
+echo $sep
+#clush $parg "lscpu | grep -v -e op-mode -e ^Vendor -e family -e Model: -e Stepping: -e BogoMIPS -e Virtual -e ^Byte -e '^NUMA node(s)' | awk '/^CPU MHz:/{sub(\$3,sprintf(\"%0.0f\",\$3))};{print}'"; echo $sep
+#clush $parg "lscpu | grep -e ^Thread"; echo $sep
 #TBD: grep '^model name' /proc/cpuinfo | sed 's/.*CPU[ ]*\(.*\)[ ]*@.*/\1/'
 #TBD: curl -s -L 'http://ark.intel.com/search?q=E5-2420%20v2' | grep -A2 -e 'Memory Channels' -e 'Max Memory Bandwidth'
 
