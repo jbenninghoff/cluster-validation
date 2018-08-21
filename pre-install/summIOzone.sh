@@ -1,11 +1,47 @@
 #!/bin/bash
-
-# script which summarizes iozone results on a set of disks
-# iozone results presumed to be in current folder in .log files
 # updated to work with AWS
 # 20171020 R.Itäpuro initialize svals variable to get correct CV values
+
+usage() {
+cat << EOF
+
+This script summarizes iozone results on a set of disks
+iozone results presumed to be in current folder in .log files
+Use -c option to output a csv format
+Use clush -aLN summIOzone.sh -c to gather all disk-test.sh results in csv.
+
+EOF
+exit
+}
+
+csv=false; DBG=''
+while getopts "cd" opt; do
+  case $opt in
+    c) csv=true ;;
+    d) DBG=true ;; # Enable debug statements
+    *) usage ;;
+  esac
+done
+[[ -n "$DBG" ]] && echo Options set: csv: $csv
+[[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
+
 files=$(ls *-iozone.log 2>/dev/null)
-[ -n "$files" ] || { echo No iozone.log files found; exit 1; }
+[[ -n "$files" ]] || { echo No iozone.log files found; exit 1; }
+
+if [[ $csv = "true" ]]; then
+   gawk -v OFS=, -v HOST=$(hostname -s) '
+      BEGIN {
+            hdr="Host,Disk,DataSize,RecordSize,SeqWrite,SeqRead,"
+            hdr=hdr"RandRead,RandWrite"
+            print hdr
+      }
+      /KB  reclen +write/ {
+        getline
+        print HOST, substr(FILENAME,0,3), $1, $2, $3, $5, $7, $8
+      }
+   ' *-iozone.log
+   exit
+fi
 
 cat *-iozone.log | gawk '
    BEGIN {
