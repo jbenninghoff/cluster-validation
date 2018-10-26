@@ -17,28 +17,31 @@ while getopts "d" opt; do
   esac
 done
 
-[ $(id -u) -ne 0 ] && SUDO='sudo -i '  #Use sudo, assuming account has passwordless sudo  (sudo -i)?
-clargs='-o -qtt'
+#Use sudo, assuming account has passwordless sudo  (sudo -i)?
+#[ $(id -u) -ne 0 ] && SUDO='sudo -i ' 
+#clargs='-o -qtt'
+clargs='-l root'
 sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
 distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 
-clush -S -B -g all 'grep -i mapr /etc/yum.repos.d/*' && { echo MapR repos found; exit 1; }
-clush -S -B -g all 'grep -i -m1 epel /etc/yum.repos.d/*' || { echo Warning, EPEL repo not found; }
+clush $clargs -S -B -g all 'grep -i mapr /etc/yum.repos.d/*' && { echo MapR repos found; exit 1; }
+clush $clargs -S -B -g all 'grep -i -m1 epel /etc/yum.repos.d/*' || { echo Warning, EPEL repo not found; }
 
-#Create 4.x repos on all nodes
+#Create 6.x repos on all nodes
 #cat /etc/yum.repos.d/maprtech.repo
-cat <<EOF2 | clush -Nq -g all "${SUDO:-} dd status=none of=/etc/yum.repos.d/maprtech.repo"
+#cat <<EOF2 | clush -Nq -g all "${SUDO:-} dd status=none of=/etc/yum.repos.d/maprtech.repo"
+cat <<EOF2 | clush $clargs -Nq -g all "{SUDO:-} dd status=none of=/etc/yum.repos.d/mapr.repo"
 [mapr-core]
 name=MapR Technologies
-baseurl=http://package.mapr.com/releases/v5.2.1/redhat/
+baseurl=http://package.mapr.com/releases/v6.0.1/redhat/
 enabled=1
 gpgcheck=0
 protect=1
  
 [mapr-eco]
 name=MapR Technologies
-baseurl=http://package.mapr.com/releases/MEP/MEP-3.0/redhat/
+baseurl=http://package.mapr.com/releases/MEP/MEP-5.0/redhat/
 enabled=1
 gpgcheck=0
 protect=1

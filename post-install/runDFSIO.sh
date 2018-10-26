@@ -31,7 +31,8 @@ if [ $MRV == "2" ] ; then
    clcmd="/opt/mapr/server/mrconfig sp list -v "
    clcmd+=" |grep -o '/dev/[^ ,]*' | sort -u | wc -l"
    tdisks=$(clush -aN "$clcmd" |awk '{ndisks+=$1}; END{print ndisks}')
-   tdisks=$(( $tdisks * $filesPerDisk ))
+   #tdisks=$(( $tdisks * $filesPerDisk ))
+   tdisks=$(echo "$tdisks * $filesPerDisk" |bc )
    mapDisks=$(echo "scale=2; 1 / $filesPerDisk" | bc)
    echo Number of disks per Map task: $mapDisks
    echo tdisks: $tdisks; echo filesPerDisk: $filesPerDisk; echo fsize: $fsize

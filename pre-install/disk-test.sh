@@ -50,6 +50,7 @@ while getopts "pasdrz:-:" opt; do
     d) DBG=true ;; # Enable debug statements
     *) usage ;;
   esac
+#TBD: add disk detail option, -i
 done
 [[ -n "$DBG" ]] && echo Options set: diskset: $diskset, seq: $seq, size: $size 
 [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
@@ -57,7 +58,7 @@ done
 find_unused_disks() {
    [[ -n "$DBG" ]] && set -x
    disklist=""
-   fdisks=$(fdisk -l | awk '/^Disk .* bytes/{print $2}' |sort)
+   fdisks=$(fdisk -l |& awk '/^Disk .* bytes/{print $2}' |sort)
    for d in $fdisks; do
       [[ -n "$DBG" ]] && echo Fdisk list loop, Checking Device: $dev
       dev=${d%:} # Strip colon off the dev path string
@@ -131,6 +132,8 @@ find_unused_disks() {
 }
 
 case "$diskset" in
+#TBD: add smartctl disk detail probes                                           
+# smartctl -d megaraid,0 -a /dev/sdf | grep -e ^Vendor -e ^Product -e Capacity -e ^Rotation -e ^Form -e ^Transport
    all)
       disklist=$(fdisk -l 2>/dev/null | awk '/^Disk \// {print $2}' |sort)
       echo -e "All disks: " $disklist; echo; exit
@@ -195,6 +198,7 @@ case "$testtype" in
          tar czf disk-tests-$(date "+%FT%T" |tr : .).tgz $files
          rm -f $files
       fi
+      #TBD: add sync option.  Async (-k) by default
       iozopts="-I -r 1M -s ${size}G -k 10 -+n -i 0 -i 1 -i 2"
       if [[ $seq == "false" ]]; then # Benchmark all disks concurrently
          for disk in $disklist; do
@@ -210,6 +214,8 @@ case "$testtype" in
          done
          echo; echo "IOzone sequential testing done"; echo
       fi
+      #write dd test
+      #dd if=/dev/urandom of=/dev/sdX oflag=direct bs=1M count=4000
       ;;
    none)
       echo No test requested

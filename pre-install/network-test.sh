@@ -157,6 +157,7 @@ for node in "${half1[@]}"; do
      ssh -n $node "$taskset $numanode0 $iperfbin -s > /dev/null" &  
      if [[ $procs -gt 1 ]]; then
         ssh -n $node "$taskset $numanode1 $iperfbin -s -p $port2 >/dev/null" & 
+        echo 2nd server process on port $port2
      fi
   else
      ssh -n $node $rpctestbin -server &
@@ -212,7 +213,9 @@ for node in "${half2[@]}"; do #Loop over all clients
          #$iperfbin -w 16K #16K window size MapR uses
          if [[ $procs -gt 1 ]]; then
             cmd="$taskset $numanode1 $iperfbin -c ${half1[$i]} -t 30 -P$xtra"
-            ssh -n $node "$cmd -p $port2 > ${log/iperf/$port2-iperf/}" &
+            ssh -n $node "$cmd -p $port2 > ${log/iperf/$port2-iperf}" &
+            echo 2nd client process to port $port2
+            echo logging to ${log/iperf/$port2-iperf}
          fi
          cmd="$taskset $numanode0 $iperfbin -c ${half1[$i]} -t 30 -P$xtra"
          ssh $node "$cmd > $log"

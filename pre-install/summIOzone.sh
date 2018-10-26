@@ -8,16 +8,18 @@ cat << EOF
 This script summarizes iozone results on a set of disks
 iozone results presumed to be in current folder in .log files
 Use -c option to output a csv format
+Use -C option to output a csv format with header line
 Use clush -aLN summIOzone.sh -c to gather all disk-test.sh results in csv.
 
 EOF
 exit
 }
 
-csv=false; DBG=''
+csv=false; hdr=false DBG=''
 while getopts "cd" opt; do
   case $opt in
     c) csv=true ;;
+    C) csv=true hdr=true;;
     d) DBG=true ;; # Enable debug statements
     *) usage ;;
   esac
@@ -29,11 +31,11 @@ files=$(ls *-iozone.log 2>/dev/null)
 [[ -n "$files" ]] || { echo No iozone.log files found; exit 1; }
 
 if [[ $csv = "true" ]]; then
-   gawk -v OFS=, -v HOST=$(hostname -s) '
+   gawk -v OFS=, -v HOST=$(hostname -s) -v HDR=$hdr '
       BEGIN {
             hdr="Host,Disk,DataSize,RecordSize,SeqWrite,SeqRead,"
             hdr=hdr"RandRead,RandWrite"
-            print hdr
+            if ( HDR == "true" ) print hdr
       }
       /KB  reclen +write/ {
         getline
@@ -48,9 +50,10 @@ cat *-iozone.log | gawk '
      swmin=6000000; srmin=swmin; rrmin=swmin; rwmin=swmin
    }
 
-# Match beginning of IOzone output line and capture data fields
-#   /         4194304    1024/ {
-# Match header of IOzone output, get next line and then read data fields
+   # Match beginning of IOzone output line and read data fields
+   #   /         4194304    1024/ {
+
+   # Match header of IOzone output, get next line and then read data fields
    /KB  reclen +write/ {
      getline
      # err chk if NF < 8

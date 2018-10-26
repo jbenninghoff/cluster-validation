@@ -11,6 +11,7 @@ else
    echo storcli command not found; exit 2
 fi
 
+storcli /c0 show all #Display all disk controller values
 storcli /c0 /eall /sall show | awk '$3 == "UGood"{print $1}'; exit 
 
 #Modify existing virtual drive 1 configuration (example)

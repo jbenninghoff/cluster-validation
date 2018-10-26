@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # jbenninghoff 2013-Oct-06  vi: set ai et sw=3 tabstop=3:
 #set -o nounset
 #set -o errexit
@@ -38,8 +38,13 @@ done
 printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
 #eval printf -v "'#%.0s'" {1..${COLUMNS:-80}}
 linuxs="-e ubuntu -e redhat -e 'red hat' -e centos -e sles"
-distro=$(cat /etc/*release |& grep -m1 -i -o "$linuxs") || distro=centos
+if [[ -f /etc/*release ]]; then
+   distro=$(cat /etc/*release |& grep -m1 -i -o "$linuxs") || distro=centos
+else
+   distro=centos
+fi
 distro=${distro,,} #make lowercase
+[[ "$(uname -s)" == "Darwin" ]] && alias sed=gsed
 #distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
 #Turn the BOKS chatter down
 export BOKS_SUDO_NO_WARNINGS=1
@@ -52,17 +57,22 @@ if type clush >& /dev/null; then
    parg1="-S"
    parg2="-B"
    parg3="-u 30"
-   parg4="-qNS -g ${group:-all}"
+   parg4="-qNS -g ${group:-all} ${cluser} "
    node=$(nodeset -I0 -e @${group:-all})
    narg="-w $node -o -qtt"
    sshcnf=$HOME/.ssh/config
    [[ ! -f $sshcnf ]] && { touch $sshcnf; chmod 600 $sshcnf; }
-   e1='/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:z;n;bz}'
-   e2='$aStrictHostKeyChecking no\nLogLevel ERROR'
-   sed -i.bak -e "$e1" -e "$e2" $sshcnf
-   if ! diff $sshcnf $sshcnf.bak >/dev/null; then
-      echo To suppress ssh noise, $sshcnf has been modified
+   if ! grep -q StrictHostKeyChecking $sshcnf ; then
+      echo To suppress ssh noise, add the following to $sshcnf
+      echo StrictHostKeyChecking no
+      echo LogLevel ERROR
    fi
+   #e1='/^StrictHostKeyChecking/{s/.*/StrictHostKeyChecking no/;:z;n;bz}'
+   #e2='$aStrictHostKeyChecking no\nLogLevel ERROR'
+   #sed -i.bak -e "$e1" -e "$e2" $sshcnf
+   #if ! diff $sshcnf $sshcnf.bak >/dev/null; then
+   #   echo To suppress ssh noise, $sshcnf has been modified
+   #fi
    # Common arguments to pass in to clush execution
    #clcnt=$(nodeset -c @all)
    #parg="$parg -f $clcnt" #fanout set to cluster node count
@@ -82,6 +92,7 @@ if [[ -f /opt/mapr/conf/daemon.conf ]]; then
    [[ -z "$srvid" ]] && srvid=mapr #guess
 else
    srvid=mapr #guess at service acct if not found
+#TBD: add 'getent passwd |grep -i mapr' to list other service acct names
 fi
 
 # Define Sudo options if available
@@ -160,7 +171,7 @@ clush $parg "echo DIMM Details; ${SUDO:-} dmidecode -t memory | awk '/Memory Dev
 #clush $parg "ifconfig | grep -o ^eth.| xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed -e detected" 
 #clush $parg "ifconfig | awk '/^[^ ]/ && \$1 !~ /lo/{print \$1}' | xargs -l ${SUDO:-} /usr/sbin/ethtool | grep -e ^Settings -e Speed" 
 clush $parg "${SUDO:-} lspci | grep -i ether"
-clush $parg ${SUDO:-} "ip link show |sed '/ lo: /,+1d; /@.*:/,+1d' |awk '/UP/{sub(\":\",\"\",\$2);print \$2}' |xargs -l /sbin/ethtool |grep -e ^Settings -e Speed -e Link"
+clush $parg ${SUDO:-} "ip link show |sed '/ lo: /,+1d; /@.*:/,+1d' |awk '/UP/{sub(\":\",\"\",\$2);print \$2}' |sort |xargs -l /sbin/ethtool |grep -e ^Settings -e Speed -e Link"
 #Above filters out lo and vnics using @interface labels
 #TBD: fix SUDO to find ethtool, not /sbin/ethtool
 #clush $parg "echo -n 'Nic Speed: '; /sbin/ip link show | sed '/ lo: /,+1d' | awk '/UP/{sub(\":\",\"\",\$2);print \$2}' | xargs -l -I % cat /sys/class/net/%/speed"
@@ -182,6 +193,8 @@ case $distro in
    ;;
    *) echo Unknown Linux distro! $distro; exit ;;
 esac
+#TBD: add smartctl disk detail probes
+# smartctl -d megaraid,0 -a /dev/sdf | grep -e ^Vendor -e ^Product -e Capacity -e ^Rotation -e ^Form -e ^Transport
 clush $parg "echo 'Udev rules: '; ${SUDO:-} ls /etc/udev/rules.d"; echo $sep
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep mapper"
 #clush $parg "echo 'Storage Drive(s): '; fdisk -l 2>/dev/null | grep '^Disk /dev/.*: ' | sort | grep -v mapper"
@@ -304,6 +317,7 @@ echo Check for root ownership of /opt/mapr
 clush $parg $parg2 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'; echo $sep
 echo "Check for $srvid login"
 clush $parg $parg1 "echo '$srvid account for MapR Hadoop '; getent passwd $srvid" || { echo "$srvid user NOT found!"; exit 2; }
+#TBD: add 'getent passwd |grep -i mapr' to search for other service acct names
 echo $sep
 
 if [[ $(id -u) -eq 0 || "$parg" =~ root || "$SUDO" =~ sudo ]]; then

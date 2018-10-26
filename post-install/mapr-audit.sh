@@ -3,8 +3,9 @@
 
 usage() {
 cat << EOF
-This script probes an installed MapR cluster configuration, writing all results to stdout
-Assumes clush is installed (available from EPEL repository)
+This script probes an installed MapR cluster configuration,
+writing all results to stdout
+Assumption is that clush is installed (available from EPEL repository)
 Log stdout/stderr with 'mapr-audit.sh |& tee mapr-audit.log'
 
 Usage: $0 [-d] [-v|-t] [s] [-e] [-a] [-g <clush group name>]

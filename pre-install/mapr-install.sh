@@ -83,7 +83,7 @@ setvars() {
    #clush() { /Users/jbenninghoff/bin/clush -l root $@; }
    if [ $(id -u) -ne 0 -a $(id -un) != "$mapruid" ]; then
       echo This script must be run as root or $mapruid
-      exit 1
+      #exit 1
    fi
 }
 setvars
@@ -445,9 +445,9 @@ install_keys() {
    secfiles="cldb.key ssl_truststore ssl_keystore maprserverticket"
    secfiles+="ssl_truststore.pem"
    for file in $secfiles; do
-      ssh $cldb1 dd if=/opt/mapr/conf/$file > $file
+      ssh $cldb1 dd if=/opt/mapr/conf/$file > ~/$file #Pull
       ddcmd="dd of=/opt/mapr/conf/$file status=none"
-      cat $file |clush $clargs -g clstr "${SUDO:-} $ddcmd"
+      cat ~/$file |clush $clargs -g clstr "${SUDO:-} $ddcmd" #Push
    done
 
    # Set owner and permissions on all key files pushed out
