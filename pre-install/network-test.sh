@@ -51,9 +51,9 @@ done
 
 setvars() {
    scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to script dir
-   iperfbin=iperf #Installed iperf version
    iperfbin=iperf3 #Installed iperf3 {uses same options}
    iperfbin=$scriptdir/iperf #Packaged version
+   iperfbin=iperf #Installed iperf version
    rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
    rpctestbin=$scriptdir/rpctest #Packaged version
    port2=5002
@@ -62,7 +62,9 @@ setvars() {
    #numanode1="14-27,42-55"
    #taskset="taskset -c "
    #tmpfile=$(mktemp); trap "rm $tmpfile; echo EXIT sigspec: $?; exit" EXIT
-   #ssh() { /usr/bin/ssh -l root $@; }
+   if [[ $(id -u) != 0 ]]; then
+      ssh() { /usr/bin/ssh -l root $@; }
+   fi
 }
 setvars
 

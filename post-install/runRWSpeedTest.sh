@@ -80,6 +80,10 @@ echo
 # Show the Storage Pools on this node
 /opt/mapr/server/mrconfig sp list -v
 echo
+# Show multimfs status
+maprcli config load -json |grep multimfs
+netstat -plnt |grep :566
+echo
 
 # Find the available MapR storage space on this node
 fsize=$(/opt/mapr/server/mrconfig sp list | awk '/totalfree/{print $9}')

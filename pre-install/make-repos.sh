@@ -21,7 +21,7 @@ done
 #[ $(id -u) -ne 0 ] && SUDO='sudo -i ' 
 #clargs='-o -qtt'
 clargs='-l root'
-sep=$(printf %80s); sep=${sep// /#} #Substitute all blanks with ######
+printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
 distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
 

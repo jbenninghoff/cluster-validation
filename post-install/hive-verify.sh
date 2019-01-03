@@ -8,6 +8,7 @@ if [[ "$srvid" == $(id -u) ]]; then
    echo This script should be run as non-service-account
 fi
 if [[ $# -ne 1 ]]; then
+   #TBD: find HS2 hostname with maprcli
    echo This script requires an HS2 hostname as only argument; exit 2
 fi
 if ! hadoop fs -ls; then
@@ -39,13 +40,18 @@ SELECT count(*) FROM mapr_web_log;
 quit;
 EOF2
 #set hive.exec.mode.local.auto=true;
+# Force MR job
+#set hive.fetch.task.conversion=none;
  
 # Test with beeline
-$hivehome/bin/beeline -u "jdbc:hive2://$hs2host:10000/default;auth=maprsasl;saslQop=auth-conf" <<EOF3
+authstr="auth=maprsasl;saslQop=auth-conf" #For use with MapR ticket
+$hivehome/bin/beeline -u "jdbc:hive2://$hs2host:10000/default;$authstr" <<EOF3
 SELECT count(*) FROM mapr_web_log;
 EOF3
  
-# Next step would be to run some hive benchmark to verify performance for the given cluster size
+# Next step would be to run some hive benchmark to verify performance
+# for the given cluster size
+# https://github.com/hortonworks/hive-testbench
 
 # Use the following to create the maprfs://user/$username folder and chmod
 # su - mapr <<EOF

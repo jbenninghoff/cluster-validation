@@ -7,7 +7,7 @@ tsjar=spark-terasort-1.1-SNAPSHOT.jar
 PATH=/opt/mapr/spark/spark-2.1.0/bin:$PATH
 
 #spark-submit --master yarn-client \
-spark-submit --master yarn --deploy-mode client \
+spark-submit --master yarn --deploy-mode cluster \
   --name 'TeraGen' \
   --class com.github.ehiggs.spark.terasort.TeraGen \
   --num-executors 10 \
@@ -23,7 +23,7 @@ exit
 
 #export DRIVER_MEMORY=1g
 #spark-submit --master yarn-cluster \
-spark-submit --master yarn --deploy-mode cluster --driver-memory 1g \
+spark-submit --master yarn --deploy-mode client --driver-memory 1g \
   --name 'TeraSort' \
   --class com.github.ehiggs.spark.terasort.TeraSort \
   --num-executors 5 \

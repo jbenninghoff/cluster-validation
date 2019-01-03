@@ -207,6 +207,17 @@ clush $parg "[ -f /etc/system-release ] && cat /etc/system-release || cat /etc/o
 clush $parg "uname -srvmo | fmt"; echo $sep
 clush $parg "echo Time Sync Check: ; date"; echo $sep
 
+echo Hostname IP addresses
+if [[ "$distro" != "sles" ]]; then
+   clush ${parg/-b /} 'hostname -I'; echo $sep
+else
+   clush ${parg/-b /} 'hostname -i'; echo $sep
+fi
+echo DNS lookup
+clush ${parg/-b /} 'host $(hostname -f)'; echo $sep
+echo Reverse DNS lookup
+clush ${parg/-b /} 'host $(hostname -i)'; echo $sep
+
 case $distro in
    ubuntu)
       # Ubuntu SElinux tools not so good.
@@ -221,12 +232,10 @@ case $distro in
    redhat|centos|red*|sles)
       if [[ "$distro" == "sles" ]]; then
          clush $parg 'echo "MapR Repos Check "; zypper repos | grep -i mapr && zypper -q info mapr-core mapr-spark mapr-patch';echo $sep
-         #clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/zypp/repos.d/* |xargs -l grep -Hi baseurl && zypper -q info mapr-core mapr-spark mapr-patch';echo $sep
          clush $parg "echo -n 'SElinux status: '; rpm -q selinux-tools selinux-policy" ; echo $sep
          clush $parg "${SUDO:-} service SuSEfirewall2_init status"; echo $sep
       else
          clush $parg 'echo "MapR Repos Check "; yum --noplugins repolist | grep -i mapr && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
-         #clush $parg 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
          clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; ${SUDO:-} getenforce" ; echo $sep
       fi
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort'
@@ -303,16 +312,6 @@ else
 fi
 clush $parg $parg2 'javadir=$(dirname $(readlink -f /usr/bin/java)); test -x $javadir/jps || { test -x $javadir/../../bin/jps || echo JDK not installed; }'
 echo $sep
-echo Hostname IP addresses
-if [[ "$distro" != "sles" ]]; then
-   clush ${parg/-b /} 'hostname -I'; echo $sep
-else
-   clush ${parg/-b /} 'hostname -i'; echo $sep
-fi
-echo DNS lookup
-clush ${parg/-b /} 'host $(hostname -f)'; echo $sep
-echo Reverse DNS lookup
-clush ${parg/-b /} 'host $(hostname -i)'; echo $sep
 echo Check for root ownership of /opt/mapr  
 clush $parg $parg2 'stat --printf="%U:%G %A %n\n" $(readlink -f /opt/mapr)'; echo $sep
 echo "Check for $srvid login"
