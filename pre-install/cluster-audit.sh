@@ -235,7 +235,7 @@ case $distro in
          clush $parg "echo -n 'SElinux status: '; rpm -q selinux-tools selinux-policy" ; echo $sep
          clush $parg "${SUDO:-} service SuSEfirewall2_init status"; echo $sep
       else
-         clush $parg 'echo "MapR Repos Check "; yum --noplugins repolist | grep -i mapr && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
+         clush $parg $parg1 'echo "MapR Repos Check "; yum --noplugins repolist | grep -i mapr && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
          clush $parg "echo -n 'SElinux status: '; grep ^SELINUX= /etc/selinux/config; ${SUDO:-} getenforce" ; echo $sep
       fi
       clush $parg 'echo "NFS packages installed "; rpm -qa | grep -i nfs |sort'

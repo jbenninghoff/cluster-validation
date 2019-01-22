@@ -1,8 +1,10 @@
 #!/bin/bash
 # jbenninghoff 2013-Jan-06  vi: set ai et sw=3 tabstop=3:
+# shellcheck disable=SC2086 disable=SC2162
 
 [[ $(id -u) != 0 ]] && { echo This script must be run as root; exit 1; }
-scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to this script dir
+# Absolute path to this script dir
+scriptdir="$(cd "$(dirname "$0")" ||exit; pwd -P)"
 
 usage() {
 cat << EOF
@@ -71,7 +73,7 @@ find_unused_disks() {
       # If device name appears to be LVM swap device, skip device
       [[ $dev == *swap* ]] && continue
       # Looks like might be swap device
-      lsblk -nl $(readlink -f $dev) | grep -i swap && continue
+      lsblk -nl "$(readlink -f $dev)" | grep -i swap && continue
       # If device is part of encrypted partition, skip device
       type cryptsetup >& /dev/null && cryptsetup isLuks $dev && continue
       if [[ $dev == /dev/md* ]]; then
@@ -160,7 +162,7 @@ case "$diskset" in
       elif [[ -f /opt/MegaRAID/MegaCLI ]]; then
          /opt/MegaRAID/MegaCLI ...
       fi
---BLOCK-COMMENT-- 
+--BLOCK-COMMENT--
       ;;
 esac
 

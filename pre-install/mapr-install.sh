@@ -74,11 +74,11 @@ setvars() {
    spw=4 #Storage Pool width
    if compgen -G "/etc/*release" >/dev/null; then
       gcmd="grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos"
-      distro=$(cat /etc/*release 2>/dev/null | "$gcmd")
+      distro=$(cat /etc/*release 2>/dev/null | eval "$gcmd")
    else
       distro=centos
    fi
-   maprver=v6.0.1 #TBD: Grep repo file to confirm or alter
+   maprver=v6.1.0 #TBD: Grep repo file to confirm or alter
    nfs='mapr-nfs' #Set to null to skip MapR NFS install
    #export JAVA_HOME=/usr/java/default #Oracle JDK
    export JAVA_HOME=/usr/lib/jvm/java #Openjdk 
@@ -393,8 +393,9 @@ install_edge_node() {
          clush -g edge -c ssl_truststore --dest /opt/mapr/conf/
          clush -g edge -c ssl_keystore --dest /opt/mapr/conf/
          clush -g edge -c maprserverticket --dest /opt/mapr/conf/
+         clush -g edge -c mapruserticket --dest /opt/mapr/conf/
          clush -g edge "${SUDO:-} chown $mapruid:$maprgid /opt/mapr/conf/{$keys}"
-         clush -g edge "${SUDO:-} chmod 600 /opt/mapr/conf/{maprserverticket,mapruserticket}"
+         clush -g edge "${SUDO:-} chmod 600 /opt/mapr/conf/{$keys}"
          clush -g edge "${SUDO:-} chmod 644 /opt/mapr/conf/ssl_truststore"
       fi
       # v4.1+ use RM zeroconf, no -RM option 
@@ -475,10 +476,12 @@ install_yarn() {
 [[ "$mfsonly" == "false" ]] && install_yarn && echo Yarn install finished
 
 install_logsearch() {
-   clush -g kibana "${SUDO:-} yum --noplugins -y install mapr-kibana"
-   clush -g es "${SUDO:-} yum --noplugins -y install mapr-elasticsearch"
    clush -g clstr "${SUDO:-} yum --noplugins -y install mapr-fluentd"
+   # ES on 3 nodes for HA
+   clush -g es "${SUDO:-} yum --noplugins -y install mapr-elasticsearch"
+   clush -g kibana "${SUDO:-} yum --noplugins -y install mapr-kibana"
    # TBD: numerous config steps for log search on secure cluster
+   es1=$(nodeset -I0 -e @es) #first node in es group
 }
 [[ "$logsearch" == true ]] && install_logsearch && echo Log Search finished
 

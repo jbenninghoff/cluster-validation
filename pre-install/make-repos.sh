@@ -18,37 +18,42 @@ while getopts "d" opt; do
 done
 
 #Use sudo, assuming account has passwordless sudo  (sudo -i)?
-#[ $(id -u) -ne 0 ] && SUDO='sudo -i ' 
+#[ $(id -u) -ne 0 ] && SUDO='sudo -i '
 #clargs='-o -qtt'
 clargs='-l root'
-printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
-distro=$(cat /etc/*release 2>&1 |grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos) || distro=centos
+#printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
+grepopts=" -m1 -i -o -e ubuntu -e redhat -e 'red hat'   -e centos"
+distro=$(cat /etc/*release 2>&1 |grep "$grepopts") || distro=centos
 distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
+reponame=/etc/yum.repos.d/mapr.repo
 
-clush $clargs -S -B -g all 'grep -i mapr /etc/yum.repos.d/*' && { echo MapR repos found; exit 1; }
-clush $clargs -S -B -g all 'grep -i -m1 epel /etc/yum.repos.d/*' || { echo Warning, EPEL repo not found; }
+if clush "$clargs" -S -B -g all 'grep -qi mapr /etc/yum.repos.d/*'; then
+   echo MapR repos found; exit 1
+fi
+if clush "$clargs" -S -B -g all 'grep -qi -m1 epel /etc/yum.repos.d/*'; then
+   echo Warning, EPEL repo not found
+fi
 
 #Create 6.x repos on all nodes
-#cat /etc/yum.repos.d/maprtech.repo
-#cat <<EOF2 | clush -Nq -g all "${SUDO:-} dd status=none of=/etc/yum.repos.d/maprtech.repo"
-cat <<EOF2 | clush $clargs -Nq -g all "{SUDO:-} dd status=none of=/etc/yum.repos.d/mapr.repo"
+cat <<EOF2 | clush "$clargs" -Nq -g all "${SUDO:-} dd status=none of=$reponame"
 [mapr-core]
 name=MapR Technologies
-baseurl=http://package.mapr.com/releases/v6.0.1/redhat/
+baseurl=http://package.mapr.com/releases/v6.1.0/redhat/
 enabled=1
 gpgcheck=0
 protect=1
- 
+
 [mapr-eco]
 name=MapR Technologies
-baseurl=http://package.mapr.com/releases/MEP/MEP-5.0/redhat/
+baseurl=http://package.mapr.com/releases/MEP/MEP-6.0/redhat/
 enabled=1
 gpgcheck=0
 protect=1
 EOF2
 
-clush $clargs -g all 'rpm --import http://package.mapr.com/releases/pub/maprgpg.key'
-clush $clargs -g all 'yum clean all'
+clush "$clargs" -g all 'rpm --import http://package.mapr.com/releases/pub/maprgpg.key'
+clush "$clargs" -g all 'yum --noplugins makecache fast'
+clush "$clargs" -g all 'yum --noplugins clean all'
 
 mkgrps() {
    #Define these groups in /etc/clustershell/groups for use by the automated install script
