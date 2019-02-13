@@ -30,6 +30,9 @@ MapR Install methods:
 Install of MapR must be done as root
 (or with passwordless sudo as mapr service account)
 
+Kerberos configuration document:
+https://mapr.com/docs/61/SecurityGuide/Configuring-Kerberos-User-Authentication.html
+
 This script requires these clush groups: clstr cldb zk rm hist [graf otsdb]
 
 EOF
@@ -37,8 +40,9 @@ exit 2
 }
 
 secure=false; kerberos=false; mfsonly=false; uninstall=false; upgrade=false
-admin=false; edge=false; metrics=false; clname=''; logsearch=false
-while getopts "Msmuxaek:n:" opt; do
+admin=false; edge=false; metrics=false; clname=''; logsearch=false; dare=false
+DBG=false
+while getopts "MsdDmuxaek:n:" opt; do
   case $opt in
     M) metrics=true ;;
     n) clname="$OPTARG" ;;
@@ -49,6 +53,8 @@ while getopts "Msmuxaek:n:" opt; do
     x) uninstall=true ;;
     a) admin=true ;;
     e) edge=true ;;
+    d) dare=true ;;
+    D) DBG=true ;;
     \?) usage ;;
   esac
 done
@@ -71,7 +77,7 @@ setvars() {
    # Login to web ui; use non-root, non-mapr account to create "hadoop admin"`
    admin1='mapr' #Non-root, non-mapr linux account which has a known password
    mapruid=mapr; maprgid=mapr #MapR service account and group
-   spw=4 #Storage Pool width
+   spw=2 #Storage Pool width
    if compgen -G "/etc/*release" >/dev/null; then
       gcmd="grep -m1 -i -o -e ubuntu -e redhat -e 'red hat' -e centos"
       distro=$(cat /etc/*release 2>/dev/null | eval "$gcmd")
@@ -98,10 +104,15 @@ setvars() {
 }
 setvars #Set some global vars for install
 
+# Check install pre-requisites
 chk_prereq() {
    # Check for clush groups to layout services
    groups="clstr cldb zk rm hist"
    [[ "$metrics" == true ]] && groups+=" graf otsdb"
+   #[[ "$edge" == true ]] && groups+=" edge "
+   if [[ $(nodeset -c @cldb) -ne $(nodeset -c @clstr) ]]; then
+      groups+=" noncldb"
+   fi
    clushgrps=true
    for grp in $groups; do
       gmsg="Clustershell group: $grp undefined"
@@ -137,14 +148,14 @@ chk_prereq() {
       exit 3; }
    clush -qB -g clstr 'pkill -f yum; exit 0'
    clush -SB -g clstr 'echo "MapR Repo Check "; yum --noplugins -q search mapr-core' || { echo MapR RPMs not found; exit 3; }
-   clush -SB -g clstr 'echo "MapR Repo URL ";yum --noplugins repoinfo mapr* |grep baseurl'
+   clush -SB -g clstr 'echo "MapR Repo URL ";yum --noplugins repoinfo mapr\* |grep baseurl'
    #rpm --import http://package.mapr.com/releases/pub/maprgpg.key
    #clush -S -B -g clstr 'echo "MapR Repos Check "; grep -li mapr /etc/yum.repos.d/* |xargs -l grep -Hi baseurl' || { echo MapR repos not found; }
    #clush -S -B -g clstr 'echo Check for EPEL; grep -qi -m1 epel /etc/yum.repos.d/*' || { echo Warning EPEL repo not found; }
    #TBD check for gpgcheck and key(s)
    read -p "All checks passed, press enter to continue or ctrl-c to abort"
 }
-[[ "$uninstall" == "false" ]] && chk_prereq # Check install pre-requisites
+[[ "$uninstall" == "true" || "$edge" == "true" ]] || chk_prereq
 
 #Find, Download and install mapr-patch
 install_patch() {
@@ -217,6 +228,19 @@ install_metrics() {
 }
 [[ "$metrics" == true ]] && install_metrics # And exit script
 
+install_logsearch() {
+   # Fluentd copies MapR service logs to ES
+   clush -g clstr "${SUDO:-} yum --noplugins -y install mapr-fluentd"
+   # ES on 3 nodes for HA
+   clush -g es "${SUDO:-} yum --noplugins -y install mapr-elasticsearch"
+   # Kibana provides webui to ES
+   clush -g kibana "${SUDO:-} yum --noplugins -y install mapr-kibana"
+
+   # TBD: numerous config steps for log search on secure cluster
+   es1=$(nodeset -I0 -e @es) #first node in es group
+}
+[[ "$logsearch" == true ]] && install_logsearch # And exit script
+
 do_upgrade() {
    #TBD: grep secure=true /opt/mapr/conf/mapr-clusters.conf && 
    # { cp ../post-install/mapr-audit.sh /tmp;
@@ -254,12 +278,12 @@ do_upgrade() {
    # run lsof /mntpoint and/or fuser -c /mntpoint;
    # stop or kill all procs using NFS
    # Stop MapR
-   clush -g clstr -b ${SUDO:-} service mapr-warden stop
-   clush -g zk -b ${SUDO:-} service mapr-zookeeper stop
-   clush -g clstr -b ${SUDO:-} jps
-   clush -g clstr -b ${SUDO:-} pkill -u $mapruid
-   clush -g clstr -b ${SUDO:-} "ps ax | grep $mapruid"
-   readtxt="If any $mapruid process still running, "
+   clush -g clstr -b "${SUDO:-} service mapr-warden stop"
+   clush -g zk -b "${SUDO:-} service mapr-zookeeper stop"
+   clush -g clstr -b "${SUDO:-} jps"
+   clush -g clstr -b "${SUDO:-} pkill -u $mapruid"
+   clush -g clstr -b "${SUDO:-} ps ax | grep $mapruid"
+   readtxt="If any $mapruid process is still running, "
    readtxt+="press ctrl-c to abort and kill all manually"
    read -p "$readtxt"
 
@@ -371,14 +395,32 @@ install_edge_node() {
       clush -g edge -b ${SUDO:-} service mapr-posix-client-basic stop
       clush -g edge -b ${SUDO:-} jps
       clush -g edge -b ${SUDO:-} pkill -u $mapruid
-      clush -g edge -b ${SUDO:-} "ps ax | grep $mapruid"
+      clush -g edge -b "${SUDO:-} ps ax | grep $mapruid"
       read -p "If any $mapruid process is still running, \
       press ctrl-c to abort and kill all manually"
-      clush -g edge -b ${SUDO:-} "yum clean all; yum -y erase mapr-\*"
+      clush -g edge -b "${SUDO:-} yum clean all; yum -y erase mapr-\*"
       clush -g edge -b ${SUDO:-} rm -rf /opt/mapr
       exit
    else
-      # Enables edge node to use warden to run HS2,Metastore,etc
+      if ! clush -S -B -g edge id $mapruid; then
+         echo $mapruid account does not exist on all nodes
+         mustexit=true
+      fi
+      clcmd="$JAVA_HOME/bin/java -version |& grep -e x86_64 -e 64-Bit -e version"
+      if ! clush -S -B -g edge "$clcmd"; then
+         echo $JAVA_HOME/bin/java does not exist on all nodes or is not 64bit
+         mustexit=true
+      fi
+      clush -qB -g edge 'pkill -f yum; exit 0'
+      if ! clush -SB -g edge 'echo "MapR Repo Check "; yum --noplugins -q search mapr-core'; then
+         echo MapR RPMs not found, define mapr repo
+         mustexit=true
+      fi
+      if [[ "$mustexit" == "true" ]]; then
+         echo Pre-requisites not met; exit 3
+      fi
+      clush -SB -g edge 'echo "MapR Repo URL ";yum --noplugins repoinfo mapr* |grep baseurl'
+      # Install mapr-core to use warden to run HS2,Metastore,etc
       rpms="mapr-core mapr-posix-client-basic"
       clush -v -g edge "${SUDO:-} yum -y install $rpms"
       # Edge node without maprcli
@@ -401,12 +443,13 @@ install_edge_node() {
       # v4.1+ use RM zeroconf, no -RM option 
       confopts="-N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb)"
       confopts+=" -HS $(nodeset -I0 -e @hist) -u $mapruid -g $maprgid"
-      confopts+=" -no-autostart -c"
+      confopts+=" -no-autostart"
+      #confopts+=" -no-autostart -c"
       [[ "$secure" == "true" ]] && confopts+=" -S"
       clush -S -g edge "${SUDO:-} /opt/mapr/server/configure.sh $confopts"
       chmod u+s /opt/mapr/bin/fusermount
       echo Edit /opt/mapr/conf/fuse.conf. Append mapr ticket file path 
-      service mapr-warden restart
+      systemctl restart mapr-warden restart
       exit
    fi
 }
@@ -414,7 +457,7 @@ install_edge_node() {
 
 chk_disk_list() {
    clear
-   clush -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
+   clush -S -B -g clstr "cat /tmp/disk.list; wc /tmp/disk.list" || { echo /tmp/disk.list not found, run clush disk-test.sh; exit 4; }
    clush -S -B -g clstr 'test -f /opt/mapr/conf/disktab' >& /dev/null && { echo MapR appears to be installed; exit 3; }
 
    # Create multiple disk lists for heterogeneous Storage Pools
@@ -439,7 +482,7 @@ chk_disk_list() {
 EOF3
    read -p "Press enter to continue or ctrl-c to abort"
 }
-chk_disk_list
+chk_disk_list # Verify all nodes have a disk.list in /tmp and present it
 
 install_mfs() {
    # 3 zookeeper nodes
@@ -475,16 +518,6 @@ install_yarn() {
 }
 [[ "$mfsonly" == "false" ]] && install_yarn && echo Yarn install finished
 
-install_logsearch() {
-   clush -g clstr "${SUDO:-} yum --noplugins -y install mapr-fluentd"
-   # ES on 3 nodes for HA
-   clush -g es "${SUDO:-} yum --noplugins -y install mapr-elasticsearch"
-   clush -g kibana "${SUDO:-} yum --noplugins -y install mapr-kibana"
-   # TBD: numerous config steps for log search on secure cluster
-   es1=$(nodeset -I0 -e @es) #first node in es group
-}
-[[ "$logsearch" == true ]] && install_logsearch && echo Log Search finished
-
 post_install() {
    # Set JAVA_HOME in env.sh after MapR rpms are installed
    # First rely on env.sh to find $JAVA_HOME, uncomment if it fails
@@ -504,15 +537,22 @@ post_install && echo Post install finished
 
 install_keys() {
    # Remove existing keys
-   secfiles="{cldb.key,ssl_truststore,ssl_keystore,maprserverticket,ssl_truststore.pem}"
-   clcmd="rm -f /opt/mapr/conf/$secfiles"
-   clush -g clstr "${SUDO:-} $clcmd"
+   secfiles="cldb.key dare.master.key maprserverticket"
+   secfiles+=" ssl_truststore ssl_truststore.pem ssl_truststore.p12"
+   secfiles+=" ssl_keystore ssl_keystore.pem ssl_keystore.p12"
+   seckeys="{${secfiles// /,}}" # Convert to ','
+   seckeys="{${seckeys//,,/,}}" # Remove any duplicate ','
+   clcmd="rm -f /opt/mapr/conf/$seckeys"
+   clush -g clstr "${SUDO:-} $clcmd >& /dev/null"
+   #echo rm-keys done; read -p "press enter to continue or ctrl-c to abort"
 
    # Generate keys using primary CLDB node
    clcmd="/opt/mapr/server/configure.sh -N $clname "
    clcmd+=" -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) "
-   clcmd+=" -S -genkeys -u $mapruid -g $maprgid -no-autostart "
-   [[ "$kerberos" == "true" ]] && clcmd+=" -K -P $mapruid/$clname@$realm"
+   clcmd+=" -secure -genkeys -f -u $mapruid -g $maprgid "
+   clcmd+=" -on-prompt-cont y -v -no-autostart -OT $(nodeset -S, -e @otsdb) "
+   [[ "$kerberos" == "true" ]] && clcmd+=" -K -P $mapruid/$clname@$realm "
+   [[ "$dare" == "true" ]] && clcmd+=" -dare "
    clush -S -w $cldb1 "${SUDO:-} $clcmd"
    if [[ $? -ne 0 ]]; then
       echo "configure.sh -genkeys failed"
@@ -520,71 +560,72 @@ install_keys() {
       echo check screen and $cldb1:/opt/mapr/logs for errors
       exit 2
    fi
+   #echo gen-keys done; read -p "press enter to continue or ctrl-c to abort"
 
    # Pull a copy of the keys from first CLDB node, then push to all nodes
-   secfiles="cldb.key ssl_truststore ssl_keystore maprserverticket"
-   secfiles+=" ssl_truststore.pem"
    for file in $secfiles; do
-      # TBD: why doesn't clush work for dd if=xx ?  Only works with ssh
-      #clush -w $cldb1 -q dd status=none if=/opt/mapr/conf/$file > ~/$file #Pull
-      ssh root@$cldb1 dd status=none if=/opt/mapr/conf/$file > ~/$file #Pull
+      ssh root@$cldb1 dd status=none if=/opt/mapr/conf/$file > ~/"$file" #Pull
       ddcmd="dd of=/opt/mapr/conf/$file status=none"
-      clush -g clstr -x $cldb1 "${SUDO:-} $ddcmd" < ~/$file #Push
+      clush -g clstr -x $cldb1 "${SUDO:-} $ddcmd" < ~/"$file" #Push
       #echo file is: $file; read -p "press enter to continue or ctrl-c to abort"
    done
+   ssh root@$cldb1 "cksum /opt/mapr/conf/$seckeys"
+   ssh root@$cldb1 "ls -l /opt/mapr/conf/$seckeys"
+   #echo pull-keys done; read -p "press enter to continue or ctrl-c to abort"
 
    # Set owner and permissions on all key files pushed out
-   clush -g clstr "${SUDO:-} chmod 600 /opt/mapr/conf/cldb.key"
-
-   secfiles="{ssl_truststore,ssl_keystore,maprserverticket,ssl_truststore.pem}"
-   clcmd="chown $mapruid:$maprgid /opt/mapr/conf/$secfiles"
+   clcmd="chown $mapruid:$maprgid /opt/mapr/conf/$seckeys"
    clush -g clstr "${SUDO:-} $clcmd"
-
-   clcmd="chmod 600 /opt/mapr/conf/$secfiles"
+   clcmd="chmod 400 /opt/mapr/conf/$seckeys"
    clush -g clstr "${SUDO:-} $clcmd"
-
-   clcmd="chmod 644 /opt/mapr/conf/ssl_truststore"
+   clcmd="chmod 444 /opt/mapr/conf/ssl_truststore*"
    clush -g clstr "${SUDO:-} $clcmd"
-   #echo install_keys(); read -p "press enter to continue or ctrl-c to abort"
+   clcmd="chmod 600 /opt/mapr/conf/{cldb.key,dare.master.key,maprserverticket}"
+   clush -g clstr "${SUDO:-} $clcmd"
+   #clush -b -g clstr "cksum /opt/mapr/conf/$seckeys"
+   #echo install_keys; read -p "press enter to continue or ctrl-c to abort"
 }
 [[ "$secure" == "true" ]] && install_keys && echo MapR Keys installed
 
 configure_mapr() {
+   cfg=/opt/mapr/server/configure.sh
    # Define all configure.sh options needed
-   # v4.1+ uses RM zeroconf, no -RM needed
    confopts="-N $clname -Z $(nodeset -S, -e @zk) -C $(nodeset -S, -e @cldb) "
    confopts+=" -u $mapruid -g $maprgid -no-autostart "
    [[ "$mfsonly" == "false" ]] && confopts+="-HS $(nodeset -I0 -e @hist) "
    [[ "$secure" == "true" ]] && confopts+=" -S "
    [[ "$kerberos" == "true" ]] && confopts+=" -K -P $mapruid/$clname@$realm "
    #TBD: Handle $pn and $realm
-
-   clush -S -g clstr "${SUDO:-} /opt/mapr/server/configure.sh $confopts"
+   if [[ "$1" == "cldb" ]]; then
+      clush -S -w $(nodeset -S, -e @cldb -x $cldb1) "${SUDO:-} $cfg $confopts"
+   else
+      clush -S -g $1 "${SUDO:-} $cfg $confopts"
+   fi
    if [[ $? -ne 0 ]]; then
       echo configure.sh failed
       echo check screen history and /opt/mapr/logs/configure.log for errors
       exit 2
    fi
-   #echo configure_mapr(); read -p "press enter to continue or ctrl-c to abort"
+   #echo configure_mapr; read -p "press enter to continue or ctrl-c to abort"
 }
-configure_mapr && echo Configure.sh finished
+configure_mapr cldb && echo Configure.sh on CLDB nodes finished
 
 format_disks() {
    disks=/tmp/disk.list
    dargs="-F -W $spw"
-   clush -g clstr "${SUDO:-} rm -f /opt/mapr/conf/disktab"
-   clush -S -g clstr "${SUDO:-} /opt/mapr/server/disksetup $dargs $disks"
+   clush -g $1 "${SUDO:-} rm -f /opt/mapr/conf/disktab"
+   clush -S -g $1 "${SUDO:-} /opt/mapr/server/disksetup $dargs $disks"
    if [[ $? -ne 0 ]]; then
       echo disksetup failed, check terminal and /opt/mapr/logs for errors
       exit 3
    fi
    #echo format_disks(); read -p "press enter to continue or ctrl-c to abort"
 }
-format_disks && echo MapR disks formatted
+format_disks cldb && echo CLDB disks formatted
 
 start_mapr() {
    clush -g zk "${SUDO:-} service mapr-zookeeper start"
-   clush -g clstr "${SUDO:-} service mapr-warden start"
+   clush -g $1 "${SUDO:-} service mapr-warden start"
 
    echo Waiting 2 minutes for system to initialize
    end=$((SECONDS+120))
@@ -599,7 +640,14 @@ start_mapr() {
    t2=$SECONDS; echo -n "Duration time for installation: "
    date -u -d @$((t2 - t1)) +"%T"
 }
-start_mapr && echo MapR warden started
+start_mapr cldb && echo Warden started on CLDB nodes
+
+# Repeat configuration on non-cldb nodes
+if [[ $(nodeset -c @noncldb) -ne 0 ]]; then
+   configure_mapr noncldb && echo MapR noncldb configured
+   format_disks noncldb && echo MapR disks formatted
+   start_mapr noncldb && echo MapR warden started
+fi
 
 add_acl_lic() {
    #uid=$(id un)
@@ -620,10 +668,6 @@ add_acl_lic() {
    sshcmd+=" maprcli acl edit -type cluster -user $admin1:fc,a"
    clush -o -qtt -w $cldb1 "su - $mapruid -c '$sshcmd'" 
 
-   sshcmd="MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket"
-   sshcmd+=" maprcli dashboard info -json "
-   clush -o -qtt -w $cldb1 "su - $mapruid -c '$sshcmd'" |grep -e id -e name
-
    cat << LICMESG
    With a web browser, connect to one of the webservers to continue
    with license installation:
@@ -633,8 +677,8 @@ add_acl_lic() {
    First, get the cluster id with maprcli like this:
 
    maprcli dashboard info -json |grep -e id -e name
-                   "name":"ps",
-                   "id":"5681466578299529065",
+                   "name":"MyCluster",
+                   "id":"1111111111111111111",
 
    Then you can use any browser to connect to http://mapr.com/. In the
    upper right corner there is a login link.  login and register if you
@@ -659,6 +703,9 @@ add_acl_lic() {
      clush -ab systemctl restart mapr-warden
 
 LICMESG
+
+   sshcmd="MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket"
+   sshcmd+=" maprcli dashboard info -json "
+   clush -o -qtt -w $cldb1 "su - $mapruid -c '$sshcmd'" |grep -e id -e name
 }
 add_acl_lic
-

@@ -1,59 +1,63 @@
 #!/bin/bash
 # jbenninghoff 2014-Aug-24  vi: set ai et sw=3 ts=3:
-# nestrada 2015-May-1
 
 [[ $(id -u) -ne 0 ]] && { echo This script must be run as root; exit 1; }
 type clush >/dev/null 2>&1 || { echo clush required for install; exit 3; }
-clgrps=/etc/clustershell/groups
-clgrps=/etc/clustershell/groups.d/local.cfg
 
 usage() {
   echo "Usage: $0 <mysql hostname> <hiveserver2 hostname> <metastore hostname>"
   echo Provide all required hostnames for installation, metastore optional
   exit 2
 }
-
 [[ $# -ne 3 ]] && usage
 
 # Configure clush groups
-grep ^mysql: $clgrps || echo mysql: $1 >> $clgrps
-grep ^hs2: $clgrps || echo hs2: $2 >> $clgrps
-grep ^hivemeta: $clgrps || echo hivemeta: $3 >> $clgrps
+clush_grps() {
+   clgrps=/etc/clustershell/groups
+   clgrps=/etc/clustershell/groups.d/local.cfg
+   grep ^mysql: $clgrps || echo mysql: $1 >> $clgrps
+   grep ^hs2: $clgrps || echo hs2: $2 >> $clgrps
+   grep ^hivemeta: $clgrps || echo hivemeta: $3 >> $clgrps
+   tail $clgrps
+   read -p "Press enter to continue or ctrl-c to abort"
+}
+clush_grps
 
-tail $clgrps
-read -p "Press enter to continue or ctrl-c to abort"
+# Install all Hive RPMs
+hive_rpms() {
+   # Embedded metastore class (without service) requires multiple MySQL accts
+   # Metastore service provides single (shared) MySQL account access
+   # See http://doc.mapr.com/display/MapR/Hive
+   # Install hive, hive metastore, and hiveserver2
+   clush -g hs2 "yum install -y mapr-hiveserver2 mapr-hive mysql"
+   clush -g hivemeta "yum install -y mapr-hivemetastore mapr-hive mysql"
+   clush -g all "yum install -y mapr-hive"
+   # Capture latest installed Hive version/path
+   hivepath=$(ls /opt/mapr/hive/hive-* -dC1 | sort -n | tail -1)
+   #TBD: check /opt/mapr/conf/env for HIVE/SASL settings
+   echo hivepath: $hivepath
+   read -p "Press enter to continue or ctrl-c to abort"
+}
 
-# embedded metastore class (without service) requires multiple MySQL accts
-# metastore service provides single (shared) MySQL account access
-# See http://doc.mapr.com/display/MapR/Hive
-# Install hive, hive metastore, and hiveserver2
-clush -g hs2 "yum install -y mapr-hiveserver2 mapr-hive mysql"
-clush -g hivemeta "yum install -y mapr-hivemetastore mapr-hive mysql"
-clush -g all "yum install -y mapr-hive"
-# Capture latest installed Hive version/path
-hivepath=$(ls /opt/mapr/hive/hive-* -dC1 | sort -n | tail -1)
-#TBD: check /opt/mapr/conf/env for HIVE/SASL settings
-echo hivepath: $hivepath
-read -p "Press enter to continue or ctrl-c to abort"
-
-#node variables needed for mysql and  hive-site.xml configuration
-MYSQL_NODE=$(nodeset -e @mysql)
-METASTORE_NODE=$(nodeset -e @hivemeta)
-for mhost in $METASTORE_NODE; do
-   METASTORE_URI+="thrift://$mhost:9083,"
-done
-# Remove trailing comma
-METASTORE_URI=${METASTORE_URI%,}
-
-#METASTORE_URI='' #Set to empty value to use local metastore class
-HS2_NODE=$(nodeset -e @hs2)
-ZK_NODES=$(nodeset -S, -e @zk)
-
-#set up mysql database and user
-ROOT_PASSWORD=mapr
-DATABASE=hive
-USER=hive
-PASSWORD=mapr
+# Variables used for mysql and hive-site.xml configuration
+setvars() {
+   MYSQL_NODE=$(nodeset -e @mysql)
+   METASTORE_NODE=$(nodeset -e @hivemeta)
+   for mhost in $METASTORE_NODE; do
+      METASTORE_URI+="thrift://$mhost:9083,"
+   done
+   # Remove trailing comma
+   METASTORE_URI=${METASTORE_URI%,}
+   # Set to empty value to use local metastore class
+   #METASTORE_URI=''
+   HS2_NODE=$(nodeset -e @hs2)
+   ZK_NODES=$(nodeset -S, -e @zk)
+   # Set up mysql database and user
+   ROOT_PASSWORD=mapr
+   DATABASE=hive
+   USER=hive
+   PASSWORD=mapr
+}
 
 install_mariadb() {
    #initial mysql configuration
@@ -61,6 +65,8 @@ install_mariadb() {
    clush -g mysql "systemctl enable --now mariadb"
    #set mysql root password
    clush -g mysql "mysqladmin -u root password $ROOT_PASSWORD"
+   # Reset mysql root password
+   #clush -g mysql "mysqladmin -u root -pmapr password $ROOT_PASSWORD"
 
    clush -g mysql mysql -u root -p$ROOT_PASSWORD << EOF
 create database $DATABASE;
@@ -75,9 +81,13 @@ grant all privileges on $DATABASE.* to '$USER'@'$HS2_NODE' with grant option;
 flush privileges;
 EOF
 #TBD: check for errors
-#echo -e "[client]\nuser=root\npassword=$ROOT_PASSWORD" > ~/.my.cnf; chmod 600 ~/.my.cnf
-#mysql -e "select user,host,password from mysql.user; show grants for 'hive';"
-echo Check for mysql install errors
+#echo -e "[client]\nuser=root\npassword=$ROOT_PASSWORD" > ~/.my.cnf
+#chmod 600 ~/.my.cnf
+#mysql -uroot -pmapr -sNe"$(mysql -uroot -pmapr -se"SELECT CONCAT('SHOW GRANTS FOR \'',user,'\'@\'',host,'\';') FROM mysql.user;")"
+echo Scroll up and check for mysql install errors
+read -p "Press enter to continue or ctrl-c to abort"
+mysql -uroot -p$ROOT_PASSWORD -e "select user,host,password from mysql.user"
+mysql -uroot -p$ROOT_PASSWORD "show grants for 'hive';"
 read -p "Press enter to continue or ctrl-c to abort"
 }
 install_mariadb
@@ -101,7 +111,10 @@ create user '$USER'@'$HS2_NODE' IDENTIFIED BY '$PASSWORD';
 grant all privileges on $DATABASE.* to '$USER'@'$HS2_NODE' with grant option;
 flush privileges;
 EOF
+
 #TBD: check for errors
+mysql -uroot -p"$ROOT_PASSWORD" -sNe"$(mysql -uroot -p"$ROOT_PASSWORD" -se"SELECT CONCAT('SHOW GRANTS FOR \'',user,'\'@\'',host,'\';') FROM mysql.user;")"
+
 #echo -e "[client]\nuser=root\npassword=$ROOT_PASSWORD" > ~/.my.cnf; chmod 600 ~/.my.cnf
 #mysql -e "select user,host,password from mysql.user; show grants for 'hive';"
 echo Check for mysql install errors
@@ -109,12 +122,11 @@ read -p "Press enter to continue or ctrl-c to abort"
 }
 
 # The driver for the MySQL JDBC connector (a jar file) is part of the
-# MapR distribution under /opt/mapr/lib/.
-# Link this jar file into the Hive lib directory.
+# MapR distribution under /opt/mapr/lib/. Link file into the Hive lib directory
 clush -g mysql "ln -s /opt/mapr/lib/mysql-connector-java-5.1.*-bin.jar $hivepath/lib/"
 
 #create or modify the hive-site.xml
-clush -g all "cat - > /tmp/hive-site.xml" <<EOF
+cat > /tmp/hive-site.xml <<EOF
 <?xml version="1.0"?>
 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
 
@@ -159,6 +171,7 @@ clush -g all "cat - > /tmp/hive-site.xml" <<EOF
 
 <!-- SASL configuration on secure cluster,
      uncomment sasl property and comment out setugi property
+-->
 
 <property>
   <name>hive.metastore.sasl.enabled</name>
@@ -167,33 +180,26 @@ clush -g all "cat - > /tmp/hive-site.xml" <<EOF
   </description>
 </property>
 
-<!-- Added in Hive 2.1 Secure cluster -->
 <property>
-  <name>hive.server2.thrift.sasl.qop</name>
-  <value>auth-conf</value>
+    <name>hive.metastore.schema.verification</name>
+    <value>false</value>
+    <description>
+      Enforce metastore schema version consistency.
+      True: Verify that version information stored in is compatible
+      with one from Hive jars.  Also disable automatic
+	   schema migration attempt. Users are required to manually
+	   migrate schema after Hive upgrade which ensures proper
+	   metastore schema migration. (Default)
+
+      False: Warn if the version information stored in metastore
+      doesn't match with one from in Hive jars.
+    </description>
 </property>
 
 <property>
-  <name>hive.server2.webui.use.pam</name>
+  <name>datanucleus.schema.autoCreateTables</name>
   <value>true</value>
 </property>
- 
-<property>
-  <name>hive.server2.webui.use.ssl</name>
-  <value>true</value>
-</property>
- 
-<property>
-  <name>hive.server2.webui.keystore.path</name>
-  <value>/opt/mapr/conf/ssl_keystore</value>
-</property>
- 
-<property>
-  <name>hive.server2.webui.keystore.password</name>
-  <value>mapr123</value>
-</property>
- 
--->
 
 <property>
   <name>hive.metastore.execute.setugi</name>
@@ -223,17 +229,59 @@ clush -g all "cat - > /tmp/hive-site.xml" <<EOF
 </property>
 
 <property>
+  <name>hive.server2.enable.doAs</name>
+  <value>true</value>
+  <description>Set this property to enable impersonation in Hive Server 2</description>
+</property>
+
+<property>
    <name>hive.server2.thrift.port</name>
    <value>10000</value>
    <description>TCP port number for Hive Server to listen on, default 10000, conflicts with webmin</description>
 </property>
 
 <property>
-  <name>hive.server2.enable.doAs</name>
-  <value>true</value>
-  <description>Set this property to enable impersonation in Hive Server 2</description>
+  <name>hive.server2.thrift.sasl.qop</name>
+  <value>auth-conf</value>
+  <description>Added in Hive 2.1 Secure cluster </description>
 </property>
 
+<property>
+  <name>hive.server2.webui.use.pam</name>
+  <value>true</value>
+</property>
+ 
+<property>
+  <name>hive.server2.webui.use.ssl</name>
+  <value>true</value>
+</property>
+ 
+<property>
+  <name>hive.server2.webui.keystore.path</name>
+  <value>/opt/mapr/conf/ssl_keystore</value>
+</property>
+ 
+<property>
+  <name>hive.server2.webui.keystore.password</name>
+  <value>mapr123</value>
+</property>
+
+<property>
+  <name>hive.server2.support.dynamic.service.discovery</name>
+  <value>true</value>
+  <description>Set to true to enable HiveServer2 dynamic service discovery
+     by its clients. (default is false)
+  </description>
+</property>
+
+<property>
+  <name>hive.server2.zookeeper.namespace</name>
+  <value>hiveserver2</value>
+  <description>The parent znode in ZooKeeper, which is used by HiveServer2
+     when supporting dynamic service discovery.(default value)
+  </description>
+</property>
+ 
 <!-- This value appears to be obsolete
 <property>
   <name>hive.server2.enable.impersonation</name>
@@ -253,30 +301,6 @@ clush -g all "cat - > /tmp/hive-site.xml" <<EOF
   <name>hive.zookeeper.quorum</name>
   <value>$ZK_NODES</value>
   <description>Zookeeper quorum used by Hive's Table Lock Manager</description>
-</property>
-
-<property>
-  <name>hive.zookeeper.client.port</name>
-  <value>5181</value>
-  <description>The Zookeeper client port. The MapR default clientPort is 5181.</description>
-</property>
-<property>
-  <name>hive.server2.support.dynamic.service.discovery</name>
-  <value>true</value>
-  <description>Set to true to enable HiveServer2 dynamic service discovery
-     by its clients. (default is false)
-  </description>
-</property>
-  <name>hive.server2.zookeeper.namespace</name>
-  <value>hiveserver2</value>
-  <description>The parent znode in ZooKeeper, which is used by HiveServer2
-     when supporting dynamic service discovery.(default value)
-  </description>
-</property>
-
-<property>
-  <name>hive.zookeeper.quorum</name>
-  <value>hostname:5181,hostname:5181,hostname:5181</value>
   <description>List of ZooKeeper servers to talk to.
   Used in connection string by JDBC/ODBC clients instead of URI of specific HiveServer2 instance.
   </description>
@@ -285,11 +309,9 @@ clush -g all "cat - > /tmp/hive-site.xml" <<EOF
 <property>
   <name>hive.zookeeper.client.port</name>
   <value>5181</value>
-  <description>The port of the ZooKeeper servers to talk to.
-    If the list of Zookeeper servers specified in hive.zookeeper.quorum
-    does not contain port numbers, this value is used.
-  </description>
+  <description>The Zookeeper client port. The MapR default clientPort is 5181.</description>
 </property>
+
 <property>
   <name>hive.zookeeper.session.timeout</name>
   <value>600000</value>
@@ -333,15 +355,16 @@ Use these 3 settings in MapR secure cluster mode
 </configuration>
 EOF
 
-clush -a "/opt/mapr/server/configure.sh -R"
-echo diff /tmp/hive-site.xml with $hivepath/conf/hive-site.xml
+if type xmllint >& /dev/null; then
+   xmllint /tmp/hive-site.xml
+fi
+echo xmldiff /tmp/hive-site.xml with $hivepath/conf/hive-site.xml
 read -p "Press enter to continue or ctrl-c to abort"
 
-#stop and start Metastore and HiveServer2
-#su - mapr -c "env MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node services -name hivemeta -action start -nodes $METASTORE_NODE"
-#su - mapr -c "env MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket maprcli node services -name hs2 -action start -nodes $HS2_NODE"
-
-su - mapr <<EOF
+#su - mapr <<EOF
+cat - <<EOF
+clush -g all,edge -c /tmp/hive-site.xml --dest $hivepath/conf/hive-site.xml
+clush -g all,edge "/opt/mapr/server/configure.sh -R"
 export MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket
 maprcli node services -name hivemeta -action start -nodes $METASTORE_NODE
 maprcli node services -name hs2 -action start -nodes $HS2_NODE
@@ -354,6 +377,5 @@ hadoop fs -mkdir /tmp
 hadoop fs -chmod 1777 /tmp
 EOF
 
-echo Run hive-verify.sh as non-root user next.
-echo Run hive-verify.sh as non-mapr user also.
+echo Run hive-verify.sh as mapr and non-mapr user next.
 

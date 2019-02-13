@@ -130,6 +130,7 @@ find_unused_disks() {
    [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
 }
 
+# Report on unused or all disks found
 case "$diskset" in
    all)
       disklist=$(fdisk -l 2>/dev/null | awk '/^Disk \// {print $2}' |sort)
@@ -166,6 +167,7 @@ case "$diskset" in
       ;;
 esac
 
+# Run read-only or read-write (destructive) tests
 case "$testtype" in
    readtest)
       [[ -n "$DBG" ]] && set -x

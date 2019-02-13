@@ -19,6 +19,8 @@ spark-submit --master yarn --deploy-mode cluster \
 
 : << '--BLOCK-COMMENT--'
 exit
+  --executor-cores 4
+  --executor-memory 16G
 --BLOCK-COMMENT--
 
 #export DRIVER_MEMORY=1g
