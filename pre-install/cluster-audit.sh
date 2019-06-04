@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # jbenninghoff 2013-Oct-06  vi: set ai et sw=3 tabstop=3:
-#set -o nounset
-#set -o errexit
+#set -o nounset errexit
 
 usage() {
 cat << EOF
-Usage: $0 -g -d -l
+Usage: $0 -g -d -l -s <mapr-service-acct-name>
 -g To specify clush group other than "all"
 -d To enable debug output
 -l To specify clush/ssh user other than $USER
+-s To specify a service account name other than "mapr"
 
 This script is a sequence of parallel shell commands probing for
 current system configuration and highlighting differences between
@@ -24,11 +24,12 @@ EOF
 
 # Handle script options
 DBG=""; group=all; cluser=""
-while getopts "dl:g:" opt; do
+while getopts "dl:g:s:" opt; do
   case $opt in
     d) DBG=true ;;
     g) group=$OPTARG ;;
     l) cluser="-l $OPTARG" ;;
+    s) srvid="$OPTARG" ;;
     \?) usage; exit ;;
   esac
 done
@@ -88,10 +89,11 @@ fi
 
 # Locate or guess MapR Service Account
 if [[ -f /opt/mapr/conf/daemon.conf ]]; then
+   echo "Using mapr.daemon.user from /opt/mapr/conf/daemon.conf"; sleep 3
    srvid=$(awk -F= '/mapr.daemon.user/ {print $2}' /opt/mapr/conf/daemon.conf)
    [[ -z "$srvid" ]] && srvid=mapr #guess
 else
-   srvid=mapr #guess at service acct if not found
+   srvid=${srvid:-mapr} #guess at service acct if not found
 #TBD: add 'getent passwd |grep -i mapr' to list other service acct names
 fi
 

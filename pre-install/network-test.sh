@@ -1,5 +1,6 @@
 #!/bin/bash
 # jbenninghoff 2013-Jun-07  vi: set ai et sw=3 tabstop=3:
+# shellcheck disable=SC2016,SC2029
 
 usage() {
 cat << EOF >&2
@@ -52,8 +53,11 @@ done
 setvars() {
    scriptdir="$(cd "$(dirname "$0")"; pwd -P)" #absolute path to script dir
    iperfbin=iperf3 #Installed iperf3 {uses same options}
-   iperfbin=$scriptdir/iperf #Packaged version
-   iperfbin=iperf #Installed iperf version
+   if type iperf >& /dev/null; then
+      iperfbin=iperf #Installed iperf version
+   else
+      iperfbin=$scriptdir/iperf #Packaged version
+   fi
    rpctestbin=/opt/mapr/server/tools/rpctest #Installed version
    rpctestbin=$scriptdir/rpctest #Packaged version
    port2=5002
@@ -63,7 +67,7 @@ setvars() {
    #taskset="taskset -c "
    #tmpfile=$(mktemp); trap "rm $tmpfile; echo EXIT sigspec: $?; exit" EXIT
    if [[ $(id -u) != 0 ]]; then
-      ssh() { /usr/bin/ssh -l root $@; }
+      ssh() { /usr/bin/ssh -l root "$@"; }
    fi
 }
 setvars
@@ -90,68 +94,71 @@ else
    echo "$HOME/host.list file, one host per line" >&2
    exit
 fi
-[[ -n "$DBG" ]] && echo hostlist: ${hostlist[@]}
+[[ -n "$DBG" ]] && echo hostlist: "${hostlist[@]}"
 
-# Convert host list into  an ip list array
-for host in ${hostlist[@]}; do
-   iplist+=( $(ssh $host hostname -i | awk '{print $1}') )
+# Convert host list into  an ip list array, awk/match first IPv4 addr
+awkcmd='{ if (match($0, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/, m)) print m[0] }'
+for host in "${hostlist[@]}"; do
+   iplist+=( $(ssh "$host" hostname -i |awk "$awkcmd") )
+   #iplist+=( $(ssh "$host" hostname -i |grep -Po '\d+(\.\d+){3}\s') )
 done
-[[ -n "$DBG" ]] && echo iplist: ${iplist[@]}
+[[ -n "$DBG" ]] && echo iplist: "${iplist[@]}"
 
 # Capture multiple NIC addrs on servers
 if [[ $multinic == "true" ]]; then
-   for host in ${hostlist[@]}; do
+   for host in "${hostlist[@]}"; do
       iplist2+=( $(ssh $host "hostname -I |sed 's/ /,/g'") )
    done #comma sep pair in bash array
    len=${#iplist2[@]}; ((len=len/2)); ((len--))
    #extract first half of array (servers for rpctest)
    multinics=( ${iplist2[@]:0:$len} )
-   [[ -n "$DBG" ]] && echo multinics: ${multinics[@]}
+   [[ -n "$DBG" ]] && echo multinics: "${multinics[@]}"
 fi
 
 # Generate the 2 bash arrays with IP address values using array extraction
 len=${#iplist[@]}; ((len=len/2))
-half1=( ${iplist[@]:0:$len} ) #extract first half of array (servers)
-half2=( ${iplist[@]:$len} ) #extract second half of array (clients)
-[[ -n "$DBG" ]] && echo half1: ${half1[@]}
-[[ -n "$DBG" ]] && echo half2: ${half2[@]}
+half1=( "${iplist[@]:0:$len}" ) #extract first half of array (servers)
+half2=( "${iplist[@]:$len}" ) #extract second half of array (clients)
+[[ -n "$DBG" ]] && echo half1: "${half1[@]}"
+[[ -n "$DBG" ]] && echo half2: "${half2[@]}"
 
 # Tar up old log files on the server hosts
-for host in ${half2[@]}; do
+for host in "${half2[@]}"; do
    p1='files=$(ls *-{rpctest,iperf}.log 2>/dev/null); '
    p1+='[[ -n "$files" ]] && '
    p1+='{ tar czf network-tests-$(date "+%FT%T" |tr : .).tgz $files; '
    p1+='rm -f $files; echo "$(hostname -s): '
    p1+='Previous run results archived into: $PWD/network-tests-*.tgz"; }'
-   [[ -n "$DBG" ]] && echo ssh $host "$p1"
-   [[ -n "$DBG" ]] && echo ssh $host 'ls *-{rpctest,iperf}.log 2>/dev/null'
-   ssh $host "$p1"
+   [[ -n "$DBG" ]] && echo ssh "$host" "$p1"
+   [[ -n "$DBG" ]] && echo ssh "$host" 'ls *-{rpctest,iperf}.log 2>/dev/null'
+   ssh "$host" "$p1"
 done
 echo
 
 # Sort client list
 if [[ -n $sortopt ]]; then
-   readarray -t sortlist < <(printf '%s\n' "${half2[@]}" | sort $sortopt)
+   readarray -t sortlist < <(printf '%s\n' "${half2[@]}" | sort "$sortopt")
    half2=( "${sortlist[@]}" )
-   echo Sorted half2: ${half2[@]}
+   echo Sorted half2: "${half2[@]}"
 fi
 
 # Handle uneven total host count, save and strip last element
-len=${#iplist[@]} #list of 3 hosts is special case, reason half2/2 can't be used
-if [[ $(($len & 1)) -eq 1 ]]; then
+#list of 3 hosts is special case, reason half2/2 can't be used
+len=${#iplist[@]}
+if [[ $((len & 1)) -eq 1 ]]; then
    echo Uneven IP address count, removing extra client IP
    #recalc length of client array, to be used to modify client array
    len=${#half2[@]}
    (( len-- ))
-   extraip=${half2[$len]}; echo extraip: $extraip
+   extraip=${half2[$len]}; echo extraip: "$extraip"
    #(( len-- )); echo len: $len
-   half2=( ${half2[@]:0:$len} )
-   [[ -n "$DBG" ]] && echo half2: ${half2[@]}
+   half2=( "${half2[@]:0:$len}" )
+   [[ -n "$DBG" ]] && echo half2: "${half2[@]}"
 fi
 [[ -n "$DBG" ]] && read -p "DBG: Press enter to continue or ctrl-c to abort"
 
 ##### Servers ###############################################
-# Its possible but not recommended to manually define the array of server hosts
+# Its possible but not recommended to manually define array of server hosts
 # half1=(10.10.100.165 10.10.100.166 10.10.100.167)
 # NOTE: use IP addresses to ensure specific NIC utilization
 for node in "${half1[@]}"; do
@@ -170,10 +177,10 @@ done
 echo ${#half1[@]} Servers have been launched
 [[ $procs -gt 1 ]] && echo $procs processes per server launched
 sleep 5 # let the servers stabilize
-[[ -n "$DBG" ]] && read -p "DBG: Press enter to continue or ctrl-c to abort"
+[[ -n "$DBG" ]] && read -rp "DBG: Press enter to continue or ctrl-c to abort"
 
 ##### Clients ###############################################
-# Its possible but not recommended to manually define the array of client hosts
+# Its possible but not recommended to manually define array of client hosts
 # half2=(10.10.100.168 10.10.100.169 10.10.100.169)
 # NOTE: use IP addresses to ensure specific NIC utilization
 i=0 # Index into the server array
@@ -287,8 +294,8 @@ fi
 
 # Define list of client nodes to collect results from
 half2+=("$extraip")
-[[ -n "$DBG" ]] && echo Clients: ${half2[@]}
-[[ -n "$DBG" ]] && read -p "DBG: Press enter to continue or ctrl-c to abort"
+[[ -n "$DBG" ]] && echo Clients: "${half2[@]}"
+[[ -n "$DBG" ]] && read -rp "DBG: Press enter to continue or ctrl-c to abort"
 echo
 
 if [[ $concurrent == "true" ]]; then
@@ -299,23 +306,23 @@ fi
 
 if [[ $runiperf == "true" ]]; then
    # Print the measured bandwidth (string TBD)
-   for host in ${half2[@]}; do ssh $host 'grep -i -h -e ^ *-iperf.log'; done
+   for host in "${half2[@]}"; do ssh "$host" 'grep -ih -e ^ *-iperf.log'; done
    echo
    echo "Theoretical Max: 1GbE=125MB/s, 10GbE=1250MB/s"
    echo "Expect 90-94% best case, 1125-1175 MB/sec on all pairs for 10GbE"
    #Kill the servers
-   for host in ${half1[@]}; do ssh $host pkill iperf; done
+   for host in "${half1[@]}"; do ssh "$host" pkill iperf; done
 else
-   #Print the network bandwidth
-   for host in ${half2[@]}; do
-      ssh $host 'grep -i -H -e ^Rate -e error *-rpctest.log'
+   # Print the network bandwidth
+   for host in "${half2[@]}"; do
+      ssh "$host" 'grep -i -H -e ^Rate -e error *-rpctest.log'
    done
    echo
    echo "(mb/s is MB/sec), Theoretical Max: 1GbE=125MB/s, 10GbE=1250MB/s"
    echo "expect 90-94% best case"
    echo "e.g. Expect 1125-1175 MB/sec on all pairs for 10GbE links"
    #Kill the servers
-   for host in ${half1[@]}; do ssh $host pkill rpctest; done
+   for host in "${half1[@]}"; do ssh "$host" pkill rpctest; done
 fi
 
 # Unlike most Linux commands, option order is important for rpctest,

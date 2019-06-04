@@ -28,22 +28,22 @@ done
 [ -n "$DBG" ] && set -x
 
 if [[ $mtask == "thin" ]]; then
-   chunksize=$[1*256*1024*1024] # default size
+   chunksize=$((1*256*1024*1024)) # default size
 else
-   chunksize=$[3*256*1024*1024] # Fat map tasks
+   chunksize=$((3*256*1024*1024)) # Fat map tasks
 fi
 ### TeraGen size (specify size using 100 Byte records)
-size=$[10*1000*1000*1000] #1TB for full TeraSort run
-size=$[1000*1000*1000]  # 1B records (100GB) for quick runs when tuning
-bytes=$(($size*100)) #Convert size to bytes
+size=$((10*1000*1000*1000)) #1TB for full TeraSort run
+size=$((1000*1000*1000))  # 1B records (100GB) for quick runs when tuning
+bytes=$((size*100)) #Convert size to bytes
 
 #Define a map count for TeraGen resulting in no sharded/chunked files
 #Bash does not do floating point, round up using modulo
-maps=$(( ($bytes/$chunksize) + ($bytes % $chunksize > 0) ))
+maps=$(( (bytes/chunksize) + (bytes % chunksize > 0) ))
 
 #find latest hadoop installed
-hadooppath=$(ls -C1 -d /opt/mapr/hadoop/hadoop-* |sort -n |tail -1)
-jarpath=$hadooppath/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.*.jar
+hadooppath=$(find /opt/mapr/hadoop -type d -name hadoop-\* |sort -n |tail -1)
+jarpath="$hadooppath/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.*.jar"
 tbpath=/benchmarks/100tb                                                        
 
 #Run TeraGen
@@ -67,7 +67,7 @@ else
       exit
    fi
    # Run TeraGen
-   hadoop jar $jarpath teragen \
+   hadoop jar "$jarpath" teragen \
    -Dmapreduce.job.maps=$maps \
    -Dmapreduce.map.disk=0 \
    -Dmapreduce.map.cpu.vcores=0 \
@@ -79,18 +79,17 @@ hadoop mfs -ls /benchmarks/tera/in | grep ^-rwx | tail
 
 # Define vars for TeraSort run
 logname=terasort-$(date "+%FT%T").log
-nodes=$(maprcli node list -columns hostname,cpus,service \
-        |grep nodemanager |wc --lines)
+nodes=$(maprcli node list -columns service |grep -c nodemanager)
 # Start with 2 reduce tasks per node, reduce tasks per node limited by RAM
 ((rtasks=nodes*${1:-2}))
-echo nodes=$nodes | tee $logname
-echo rtasks=$rtasks | tee -a $logname
+echo nodes="$nodes" | tee "$logname"
+echo rtasks="$rtasks" | tee -a "$logname"
 hadoop fs -rm -r /benchmarks/tera/out
 
 # Run TeraSort with fat or thin map tasks, depending on chunksize
 # Set mapreduce disk and vcores to 0 to size yarn containers by RAM only
 case $chunksize in
-   $[3*256*1024*1024] )
+   $((3*256*1024*1024)) )
       echo "Running TeraSort (size=$size) using 'fat' map tasks"
       echo "Uses fewer map tasks, reduces MxR shuffle"
       sleep 2
@@ -150,7 +149,7 @@ sleep 3
 # Capture the job history log
 myd=$(date +'%Y/%m/%d')
 myj=$(grep 'INFO mapreduce.Job: Running job' terasort.tmp |awk '{print $7}')
-myhist="/var/mapr/cluster/yarn/rm/staging/history/done/$myd/000000/$myj*.jhist"
+myhist="/var/mapr/cluster/yarn/rm/staging/history/done/$myd/00*/$myj*.jhist"
 until (hadoop fs -stat $myhist); do
  echo Waiting for $myhist; sleep 5
 done

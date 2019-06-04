@@ -1,5 +1,6 @@
 #!/bin/bash
 # jbenninghoff 2014-Aug-24  vi: set ai et sw=3 ts=3:
+# shellcheck disable=SC2162
 
 [[ $(id -u) -ne 0 ]] && { echo This script must be run as root; exit 1; }
 type clush >/dev/null 2>&1 || { echo clush required for install; exit 3; }
@@ -15,13 +16,13 @@ usage() {
 clush_grps() {
    clgrps=/etc/clustershell/groups
    clgrps=/etc/clustershell/groups.d/local.cfg
-   grep ^mysql: $clgrps || echo mysql: $1 >> $clgrps
-   grep ^hs2: $clgrps || echo hs2: $2 >> $clgrps
-   grep ^hivemeta: $clgrps || echo hivemeta: $3 >> $clgrps
+   grep ^mysql: $clgrps || echo mysql: "$1" >> $clgrps
+   grep ^hs2: $clgrps || echo hs2: "$2" >> $clgrps
+   grep ^hivemeta: $clgrps || echo hivemeta: "$3" >> $clgrps
    tail $clgrps
    read -p "Press enter to continue or ctrl-c to abort"
 }
-clush_grps
+clush_grps "$1" "$2" "$3"
 
 # Install all Hive RPMs
 hive_rpms() {
@@ -33,9 +34,9 @@ hive_rpms() {
    clush -g hivemeta "yum install -y mapr-hivemetastore mapr-hive mysql"
    clush -g all "yum install -y mapr-hive"
    # Capture latest installed Hive version/path
-   hivepath=$(ls /opt/mapr/hive/hive-* -dC1 | sort -n | tail -1)
+   hivepath=$(find /opt/mapr/hive -type d -name hive-\* |sort -n |tail -1)
    #TBD: check /opt/mapr/conf/env for HIVE/SASL settings
-   echo hivepath: $hivepath
+   echo hivepath: "$hivepath"
    read -p "Press enter to continue or ctrl-c to abort"
 }
 
@@ -59,6 +60,7 @@ setvars() {
    PASSWORD=mapr
 }
 
+# Install new mysql rpms, hive user and grants
 install_mariadb() {
    #initial mysql configuration
    clush -g mysql "yum install -y mariadb-server"
@@ -80,18 +82,20 @@ create user '$USER'@'$HS2_NODE' IDENTIFIED BY '$PASSWORD';
 grant all privileges on $DATABASE.* to '$USER'@'$HS2_NODE' with grant option;
 flush privileges;
 EOF
-#TBD: check for errors
-#echo -e "[client]\nuser=root\npassword=$ROOT_PASSWORD" > ~/.my.cnf
-#chmod 600 ~/.my.cnf
-#mysql -uroot -pmapr -sNe"$(mysql -uroot -pmapr -se"SELECT CONCAT('SHOW GRANTS FOR \'',user,'\'@\'',host,'\';') FROM mysql.user;")"
-echo Scroll up and check for mysql install errors
-read -p "Press enter to continue or ctrl-c to abort"
-mysql -uroot -p$ROOT_PASSWORD -e "select user,host,password from mysql.user"
-mysql -uroot -p$ROOT_PASSWORD "show grants for 'hive';"
-read -p "Press enter to continue or ctrl-c to abort"
+
+   echo Scroll up and check for mysql install errors
+   read -p "Press enter to continue or ctrl-c to abort"
+   mysql -uroot -p$ROOT_PASSWORD -e "select user,host,password from mysql.user"
+   mysql -uroot -p$ROOT_PASSWORD "show grants for 'hive';"
+   read -p "Press enter to continue or ctrl-c to abort"
+   #TBD: check for errors
+   #echo -e "[client]\nuser=root\npassword=$ROOT_PASSWORD" > ~/.my.cnf
+   #chmod 600 ~/.my.cnf
+   #mysql -uroot -pmapr -sNe"$(mysql -uroot -pmapr -se"SELECT CONCAT('SHOW GRANTS FOR \'',user,'\'@\'',host,'\';') FROM mysql.user;")"
 }
 install_mariadb
 
+# Old install function
 install_mysql() {
    #initial mysql configuration
    clush -g mysql "yum install -y mysql-server"
@@ -113,7 +117,7 @@ flush privileges;
 EOF
 
 #TBD: check for errors
-mysql -uroot -p"$ROOT_PASSWORD" -sNe"$(mysql -uroot -p"$ROOT_PASSWORD" -se"SELECT CONCAT('SHOW GRANTS FOR \'',user,'\'@\'',host,'\';') FROM mysql.user;")"
+#mysql -uroot -p"$ROOT_PASSWORD" -sNe"$(mysql -uroot -p"$ROOT_PASSWORD" -se"SELECT CONCAT('SHOW GRANTS FOR \'',user,'\'@\'',host,'\';') FROM mysql.user;")"
 
 #echo -e "[client]\nuser=root\npassword=$ROOT_PASSWORD" > ~/.my.cnf; chmod 600 ~/.my.cnf
 #mysql -e "select user,host,password from mysql.user; show grants for 'hive';"
@@ -125,7 +129,7 @@ read -p "Press enter to continue or ctrl-c to abort"
 # MapR distribution under /opt/mapr/lib/. Link file into the Hive lib directory
 clush -g mysql "ln -s /opt/mapr/lib/mysql-connector-java-5.1.*-bin.jar $hivepath/lib/"
 
-#create or modify the hive-site.xml
+#create a hive-site.xml
 cat > /tmp/hive-site.xml <<EOF
 <?xml version="1.0"?>
 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
@@ -358,11 +362,13 @@ EOF
 if type xmllint >& /dev/null; then
    xmllint /tmp/hive-site.xml
 fi
-echo xmldiff /tmp/hive-site.xml with $hivepath/conf/hive-site.xml
+echo xmldiff /tmp/hive-site.xml with "$hivepath/conf/hive-site.xml"
 read -p "Press enter to continue or ctrl-c to abort"
 
-#su - mapr <<EOF
+# Run these commands using 'mapr' service account
 cat - <<EOF
+#su - mapr <<EOF
+echo Run these commands using 'mapr' service account
 clush -g all,edge -c /tmp/hive-site.xml --dest $hivepath/conf/hive-site.xml
 clush -g all,edge "/opt/mapr/server/configure.sh -R"
 export MAPR_TICKETFILE_LOCATION=/opt/mapr/conf/mapruserticket
