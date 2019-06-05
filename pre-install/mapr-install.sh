@@ -672,7 +672,7 @@ install_keys() {
    secfiles+=" ssl_keystore.pem ssl_keystore.p12"
    [[ "$dare" == "true" ]] && secfiles+=" dare.master.key"
    seckeys="{${secfiles// /,}}" # Convert to ','
-   seckeys="{${seckeys//,,/,}}" # Remove any duplicate ','
+   seckeys="${seckeys//,,/,}" # Remove any duplicate ','
    clcmd="rm -f /opt/mapr/conf/$seckeys"
    clush -g clstr "${SUDO:-} $clcmd >& /dev/null"
    [[ "$DBG" == "true" ]] && { echo Removed existing keys; read -p "$pause"; }
