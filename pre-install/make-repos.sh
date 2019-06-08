@@ -18,9 +18,9 @@ while getopts "d" opt; do
 done
 
 #Use sudo, assuming account has passwordless sudo  (sudo -i)?
-#[ $(id -u) -ne 0 ] && SUDO='sudo -i '
-#clargs='-o -qtt'
-clargs='-l root'
+[ "$(id -u)" -ne 0 ] && { SUDO='sudo -i '; clargs=' -l root'; }
+[ "$(id -u)" -ne 0 ] && SUDO='sudo -i '
+clargs='-o -qtt'
 #printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
 grepopts=" -m1 -i -o -e ubuntu -e redhat -e 'red hat'   -e centos"
 distro=$(cat /etc/*release 2>&1 |grep "$grepopts") || distro=centos

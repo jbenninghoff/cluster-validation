@@ -261,7 +261,10 @@ install_logsearch() {
       # Fluentd copies MapR service logs to ES
       clush -g clstr "${SUDO:-} yum --noplugins -y install mapr-fluentd"
       # ElasticSearch on 3 nodes for HA (mapr ulimit -n >= 64K)
-      clush -b -g es 'su -c "ulimit -n" - mapr'; read -p "$pause"
+      if [[ "$DBG" == "true" ]]; then
+         clush -b -g es 'su -c "echo Num Files; ulimit -n" - mapr'
+         read -p "$pause"
+      fi
       clush -g es "${SUDO:-} yum --noplugins -y install mapr-elasticsearch"
       # Kibana provides webui to ES
       clush -g kibana "${SUDO:-} yum --noplugins -y install mapr-kibana"
@@ -275,9 +278,13 @@ install_logsearch() {
          clcmd+=" -ES $(nodeset -S, -e @es) "
          clcmd+=" -EPelasticsearch '-genESKeys' "
          clush -w $es1 "${SUDO:-} $clcmd"
+         clcmd="cat /opt/mapr/elasticsearch/elasticsearchversion"
+         esver=$(clush -Nw $es1 "${SUDO:-} $clcmd")
+         [[ "$DBG" == "true" ]] && echo ES Version $esver
+         [[ "$DBG" == "true" ]] && read -p "$pause"
 
          # Pull a copy of the keys from first ES node
-         esdir="/opt/mapr/elasticsearch/elasticsearch-5.4.1/etc/elasticsearch"
+         esdir="/opt/mapr/elasticsearch/elasticsearch-$esver/etc/elasticsearch"
          [[ "$DBG" == "true" ]] && ssh root@$es1 ls $esdir $esdir/ca $esdir/sg $esdir/keystores
          [[ "$DBG" == "true" ]] && read -p "$pause"
          eskeys="sg/ca/es-root-ca.pem"
@@ -289,6 +296,7 @@ install_logsearch() {
          done
          rm -rf ~/eskeys
          mkdir -p ~/eskeys/sg ~/eskeys/sg/ca
+         [[ "$DBG" == "true" ]] && echo Pulling ES Keys
          for file in $eskeys; do
             ssh root@$es1 dd status=none if=$esdir/$file > ~/eskeys/"$file" #Pull
             [[ "$DBG" == "true" ]] && { echo file is: $file; read -p "$pause"; }
@@ -308,6 +316,7 @@ install_logsearch() {
             eskeys+=" $eshost-srvr-keystore.jks"
          done
          clush -g es -x $es1 "${SUDO:-} mkdir -p $esdir/keystores"
+         [[ "$DBG" == "true" ]] && echo Pushing ES .jks
          for file in $eskeys; do
             ddcmd="dd of=$esdir/keystores/$file status=none"
             clush -g es -x $es1 "${SUDO:-} $ddcmd" < ~/eskeys/sg/"$file" #Push
@@ -321,6 +330,7 @@ install_logsearch() {
          for eshost in $(nodeset -e @es); do
             eskeys+=" sg_http_$eshost.yml sg_ssl_$eshost.yml"
          done
+         [[ "$DBG" == "true" ]] && echo Pushing ES yml files
          for file in $eskeys; do
             ddcmd="dd of=$esdir/$file status=none"
             clush -g es -x $es1 "${SUDO:-} $ddcmd" < ~/eskeys/sg/"$file" #Push
@@ -338,9 +348,11 @@ install_logsearch() {
 
          # Copy pem and keystore_password to all Kibana nodes
          # v6.0.1 bug: vi /opt/mapr/kibana/kibana-5.4.1/bin/configure.sh (line #375)
-         kibdir="/opt/mapr/kibana/kibana-5.4.1/config"
+         clcmd="cat /opt/mapr/kibana/kibanaversion"
+         kibver=$(clush -Ng kibana "${SUDO:-} $clcmd")
+         kibdir="/opt/mapr/kibana/kibana-$kibver/config"
          file=sg/ca/es-root-ca.pem
-         clush -g kibana "${SUDO:-} 'mkdir -p $kibdir/ca; chown mapr:mapr $kibdir/ca'"
+         clush -g kibana "${SUDO:-} mkdir -p $kibdir/ca; chown mapr:mapr $kibdir/ca"
          ddcmd="dd of=$kibdir/ca/$(basename $file) status=none"
          clush -g kibana "${SUDO:-} $ddcmd" < ~/eskeys/$file
          chcmd="chown mapr:mapr $kibdir/ca/$(basename $file);"
@@ -353,6 +365,7 @@ install_logsearch() {
          chcmd="chown mapr:mapr $kibdir/$file;"
          chcmd+=" chmod 640 $kibdir/$file"
          clush -g kibana "${SUDO:-} $chcmd"
+         [[ "$DBG" == "true" ]] && echo All ES Keys pushed out
       fi
 
       # Run configure with all required options
@@ -712,8 +725,12 @@ install_keys() {
    clush -g clstr "${SUDO:-} $clcmd"
    clcmd="chmod 444 /opt/mapr/conf/ssl_truststore*"
    clush -g clstr "${SUDO:-} $clcmd"
-   clcmd="chmod 600 /opt/mapr/conf/{cldb.key,dare.master.key,maprserverticket}"
+   clcmd="chmod 600 /opt/mapr/conf/{cldb.key,maprserverticket}"
    clush -g clstr "${SUDO:-} $clcmd"
+   if [[ "$dare" == "true" ]]; then
+      clcmd="chmod 600 /opt/mapr/conf/dare.master.key"
+      clush -g clstr "${SUDO:-} $clcmd"
+   fi
    #clush -b -g clstr "cksum /opt/mapr/conf/$seckeys"
    #echo install_keys; read -p "$pause"
 }
