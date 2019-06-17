@@ -14,14 +14,17 @@ spkhome=$(find /opt/mapr/spark -maxdepth 1 -type d -name spark-\* \
          |sort -n |tail -1)
 spkjar=$(find $spkhome -name spark-examples\*.jar)
 spkclass=org.apache.spark.examples.SparkPi
+spkdrv=$(hostname -i)
+#$spkhome/bin/spark-submit --conf spark.driver.host=$spkdrv \
 
-$spkhome/bin/spark-submit --conf spark.driver.host=10.20.30.101 \
+$spkhome/bin/spark-submit \
    --master yarn \
    --deploy-mode client \
-   --driver-java-options="-Dmylevel=INFO" \
    --class $spkclass \
    $spkjar 40
 
+# For random free port bind issue
+#export SPARK_LOCAL_IP='127.0.0.1'
 
 #$spkhome/bin/spark-submit --master yarn --deploy-mode cluster \
 #   --class $spkclass $spkjar 40
