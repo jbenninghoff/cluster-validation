@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # jbenninghoff 2013-Oct-06  vi: set ai et sw=3 tabstop=3:
+# shellcheck disable=SC2162,SC2086,SC2046,SC2016
 #set -o nounset errexit
 
 usage() {
@@ -148,7 +149,7 @@ esac
 echo;echo "#################### Hardware audits ###############################"
 date; echo $sep
 echo NodeSet: $(nodeset -e @${group:-all}); echo $sep
-echo All the groups currently defined for clush:; echo $(nodeset -l)
+echo All the groups currently defined for clush:; nodeset -l
 echo groups zk, cldb, rm, and hist needed for clush based install; echo $sep
 # probe for system info ###############
 clush $parg "echo DMI Sys Info:; ${SUDO:-} dmidecode | grep -A2 '^System Information'"; echo $sep
@@ -297,10 +298,17 @@ case $sysd in
 esac
 echo Check for nosuid and noexec mounts
 clush $parg $parg3 "mount | grep -e noexec -e nosuid | grep -v tmpfs |grep -v 'type cgroup'"; echo $sep
+#clush $parg $parg3 "mount | grep -e noexec -e nosuid | grep -v tmpfs |grep -v 'type cgroup'" |cut -d' ' -f3- |column -t; echo $sep
 echo Check for /tmp permission 
 clush $parg "stat -c %a /tmp | grep 1777 || echo /tmp permissions not 1777" ; echo $sep
-echo Check for tmpwatch on NM local dir
-clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"; echo $sep
+case $sysd in
+   true)
+      ;;
+   false)
+      echo Check for tmpwatch on NM local dir
+      clush $parg $parg2 "grep -H /tmp/hadoop-mapr/nm-local-dir /etc/cron.daily/tmpwatch || echo Not in tmpwatch: /tmp/hadoop-mapr/nm-local-dir"; echo $sep
+      ;;
+esac
 #FIX: clush -l root -ab "echo '/usr/sbin/tmpwatch \"\$flags\" -x /tmp/hadoop-mapr/nm-local-dir' >> /etc/cron.daily/tmpwatch" 
 #TBD: systemd-tmpfiles 'tmpfiles.d' man page.  Configuration 
 #in /usr/lib/tmpfiles.d/tmp.conf, and in /etc/tmpfiles.d/*.conf.

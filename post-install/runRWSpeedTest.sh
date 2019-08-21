@@ -14,6 +14,7 @@ Usage: $0 [-n] [-r] [-p] [-d] [-s] [-x <int>]
 -d option for script debug
 -s option to run a set of fixed size tests
 -x option for file size divider
+-X option for file size multiplier
 -p option to preserve local volume [default is to delete it]
 -r option to use regular 3x replication volume
 -n option to skip compression on tests
@@ -23,14 +24,16 @@ EOF
 }
 
 dbg=false; fact=1; sizes=false; preserve=false; volume=local; compression=true
-while getopts "nrpdsx:" opt; do
+mult=1
+while getopts "nrpdsx:X:" opt; do
    case $opt in
       n) compression=false ;;
       r) volume=regular ;;
       p) preserve=true ;;
       d) dbg=true ;;
       s) sizes=true ;;
-      x) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && fact=$OPTARG || { echo $OPTARG is not an number; usage; exit 1; } ;;
+      x) [[ "$OPTARG" =~ ^[0-9]+$ ]] && fact=$OPTARG || { echo $OPTARG is not an integer; usage; exit 1; } ;;
+      X) [[ "$OPTARG" =~ ^[0-9]+$ ]] && mult=$OPTARG || { echo $OPTARG is not an integer; usage; exit 1; } ;;
       :) echo "Option -$OPTARG requires an argument." >&2; usage; exit 2 ;;
       *) usage; exit 3 ;;
    esac
@@ -89,13 +92,20 @@ echo
 fsize=$(/opt/mapr/server/mrconfig sp list | awk '/totalfree/{print $9}')
 #echo Total File space $fsize MB
 
-# Use 1% of available space
+# Start with 1% of available space
 (( fsize=(fsize/100) )) 
-# Divide by the number of processes that wil be run to set the file size
+# Divide by the number of processes that will be run to set the file size
 (( fsize=(fsize/(${fact:-1}*ndisk) ) ))
-# TBD: Check if $fsize is big enough to exceed MFS cache
+[[ $mult -gt 1 ]] && (( fsize=(fsize*mult) ))
+mfscache=$(pgrep -a mfs |grep -o -- '-m [0-9]*' |grep -o '[0-9]*')
 echo Num processes: $ndisk
 echo File size set to $fsize MB; echo
+if [[ $mfscache -gt $((ndisk * fsize)) ]]; then
+   echo MFS cache exceeds aggregate file size
+   echo mfscache: $mfscache
+   echo data size: $((ndisk * fsize))
+   exit
+fi
 #read -p "Press enter to continue or ctrl-c to abort"
 
 # Usage: RWSpeedTest filename [-]megabytes uri

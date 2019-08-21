@@ -1,6 +1,6 @@
 #!/bin/bash
 # updated to work with AWS
-# 20171020 R.Itäpuro initialize svals variable to get correct CV values
+# 20171020 R.Itäpuro initialize valsum variable to get correct CV values
 
 usage() {
 cat << EOF
@@ -16,44 +16,44 @@ exit
 }
 
 csv=false; hdr=false DBG=''
-while getopts "cd" opt; do
-  case $opt in
-    c) csv=true ;;
-    C) csv=true hdr=true;;
-    d) DBG=true ;; # Enable debug statements
-    *) usage ;;
-  esac
+while getopts "Ccd" opt; do
+   case $opt in
+      c) csv=true ;;
+      C) csv=true hdr=true;;
+      d) DBG=true ;; # Enable debug statements
+      *) usage ;;
+   esac
 done
 [[ -n "$DBG" ]] && echo Options set: csv: $csv
-[[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
+[[ -n "$DBG" ]] && read -rp "Press enter to continue or ctrl-c to abort"
 
-files=$(ls *-iozone.log 2>/dev/null)
+files=$(ls ./*-iozone.log 2>/dev/null)
 [[ -n "$files" ]] || { echo No iozone.log files found; exit 1; }
 
 if [[ $csv = "true" ]]; then
-   gawk -v OFS=, -v HOST=$(hostname -s) -v HDR=$hdr '
+   gawk -v OFS=, -v HOST="$(hostname -s)" -v HDR=$hdr '
       BEGIN {
-            hdr="Host,Disk,DataSize,RecordSize,SeqWrite,SeqRead,"
-            hdr=hdr"RandRead,RandWrite"
-            if ( HDR == "true" ) print hdr
+         hdr="Host,Disk,DataSize,RecordSize,SeqWrite,SeqRead,"
+         hdr=hdr"RandRead,RandWrite"
+         if ( HDR == "true" ) print hdr
       }
       /KB  reclen +write/ {
-        getline
-        print HOST, substr(FILENAME,0,3), $1, $2, $3, $5, $7, $8
+         getline
+         print HOST, substr(FILENAME,0,3), $1, $2, $3, $5, $7, $8
       }
-   ' *-iozone.log
+   ' ./*-iozone.log
    exit
 fi
 
-cat *-iozone.log | gawk '
+cat ./*-iozone.log | gawk '
    BEGIN {
-     swmin=6000000; srmin=swmin; rrmin=swmin; rwmin=swmin
+      # Initialize seq & rand, min and max values
+      swmin=6000000; srmin=swmin; rrmin=swmin; rwmin=swmin
    }
 
-   # Match beginning of IOzone output line and read data fields
-   #   /         4194304    1024/ {
-
-   # Match header of IOzone output, get next line and then read data fields
+   # For all input files,
+   # Match header of IOzone output line,
+   # Get next line, read and store data fields
    /KB  reclen +write/ {
      getline
      # err chk if NF < 8
@@ -77,18 +77,19 @@ cat *-iozone.log | gawk '
      printf "%-7s %1.2f%s\n", "File size:", fsize/(1024*1024), "GB"
      printf "%-7s %6d\n", "Disk count:", count
      print ""
+
      print "IOzone Sequential Write Summary(KB/sec)"
      swavg = swtotal/count
      printf "%-7s %1.2f%s\n", "aggregate:", swtotal/(1024*1024), "GB/sec"
      printf "%-7s %6d\n", "mean:", swavg
      printf "%-7s %6d\n", "min:", swmin
      printf "%-7s %6d\n", "max:", swmax
-     svals = 0
+     valsum = 0
      for (val in swvals) {
-       svals += (swvals[val] - swavg) ** 2
+       valsum += (swvals[val] - swavg) ** 2
      }
-#     print "stdev: ", sqrt(svals/count)
-     printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / swavg)
+#     print "stdev: ", sqrt(valsum/count)
+     printf "CV: %00.1f%%\n", 100*(sqrt(valsum/count) / swavg)
      print ""
 
      print "IOzone Sequential Read Summary(KB/sec)"
@@ -97,12 +98,12 @@ cat *-iozone.log | gawk '
      printf "%-7s %6d\n", "mean:", sravg
      printf "%-7s %6d\n", "min:", srmin
      printf "%-7s %6d\n", "max:", srmax
-     svals = 0
+     valsum = 0
      for (val in srvals) {
-       svals += (srvals[val] - sravg) ** 2
+       valsum += (srvals[val] - sravg) ** 2
      }
-#     print "stdev: ", sqrt(svals/count)
-     printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / sravg)
+#     print "stdev: ", sqrt(valsum/count)
+     printf "CV: %00.1f%%\n", 100*(sqrt(valsum/count) / sravg)
      print ""
 
      print "IOzone Random Write Summary(KB/sec)"
@@ -111,12 +112,12 @@ cat *-iozone.log | gawk '
      printf "%-7s %6d\n", "mean:", rwavg
      printf "%-7s %6d\n", "min:", rwmin
      printf "%-7s %6d\n", "max:", rwmax
-     svals = 0
+     valsum = 0
      for (val in rwvals) {
-       svals += (rwvals[val] - rwavg) ** 2
+       valsum += (rwvals[val] - rwavg) ** 2
      }
-#     print "stdev: ", sqrt(svals/count)
-     printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / rwavg)
+#     print "stdev: ", sqrt(valsum/count)
+     printf "CV: %00.1f%%\n", 100*(sqrt(valsum/count) / rwavg)
      print ""
 
      print "IOzone Random Read Summary(KB/sec)"
@@ -125,12 +126,12 @@ cat *-iozone.log | gawk '
      printf "%-7s %6d\n", "mean:", rravg
      printf "%-7s %6d\n", "min:", rrmin
      printf "%-7s %6d\n", "max:", rrmax
-     svals = 0
+     valsum = 0
      for (val in rrvals) {
-       svals += (rrvals[val] - rravg) ** 2
+       valsum += (rrvals[val] - rravg) ** 2
      }
-#     print "stdev: ", sqrt(svals/count)
-     printf "CV: %00.1f%%\n", 100*(sqrt(svals/count) / rravg)
+#     print "stdev: ", sqrt(valsum/count)
+     printf "CV: %00.1f%%\n", 100*(sqrt(valsum/count) / rravg)
      print ""
    }
 '

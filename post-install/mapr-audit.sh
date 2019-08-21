@@ -78,8 +78,8 @@ sudo_setup() {
    fi
 
    clcmd="${SUDO:-} grep -q '^Defaults.*requiretty' /etc/sudoers"
-   if (clush "$parg" -S $clcmd >& /dev/null); then
-      parg="-o -qtt "$parg"" # Add -qtt for sudo tty via ssh/clush
+   if (clush $parg -S $clcmd >& /dev/null); then
+      parg="-o -qtt $parg" # Add -qtt for sudo tty via ssh/clush
       #To run sudo without a tty use:
       # clush -ab -o -qtt
       # "sudo sed -i.bak '/^Defaults.*requiretty/s/^/#/' /etc/sudoers"
@@ -128,54 +128,54 @@ cluster_checks2() {
    opts+=' -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed'
    eval ${node:-} maprcli volume list "$opts"; echo "$sep"
    echo
-   #clush "$parg" "echo MapR /etc/shadow access:; ls -l /etc/shadow; id $srvid"
-   clush "$parg" "echo MapR /etc/shadow access:; stat -c '%A %U %G %n'\
+   #clush $parg "echo MapR /etc/shadow access:; ls -l /etc/shadow; id $srvid"
+   clush $parg "echo MapR /etc/shadow access:; stat -c '%A %U %G %n'\
       /etc/shadow; id $srvid"
    echo "$sep"
-   clush "$parg" "echo 'MapR SHMEM Segments:'; ${SUDO:-} ipcs -m | uniq -w10"
+   clush $parg "echo 'MapR SHMEM Segments:'; ${SUDO:-} ipcs -m | uniq -w10"
    echo "$sep"
-   clush "$parg" "echo MapR HostID:; cat /opt/mapr/hostid"; echo "$sep"
-   clush "$parg" "echo MapR Patch; yum --noplugins list installed mapr-patch"
+   clush $parg "echo MapR HostID:; cat /opt/mapr/hostid"; echo "$sep"
+   clush $parg "echo MapR Patch; yum --noplugins list installed mapr-patch"
    echo "$sep"
    echo MFS Heap Size:
-   clush "${parg/-b/}" "pgrep -oaf /opt/mapr/server/mfs" | \
+   clush ${parg/-b/} "pgrep -oaf /opt/mapr/server/mfs" | \
       grep -e '\-m [^ ]*' -e '^[^ ]*'
    echo "$sep"
-   clush "$parg" "echo 'MapR Storage Pools'; \
+   clush $parg "echo 'MapR Storage Pools'; \
       ${SUDO:-} /opt/mapr/server/mrconfig sp list -v"
    echo "$sep"
-   clush "$parg" "echo 'Cat mapr-clusters.conf'; \
+   clush $parg "echo 'Cat mapr-clusters.conf'; \
       cat /opt/mapr/conf/mapr-clusters.conf"
    echo "$sep"
    #TBD: if mapr-clusters.conf has more than one line,
    #look for mirror volumes {maprcli volume list -json |grep mirror???}
-   clush "$parg" "echo 'MapR Env Settings'; grep ^export /opt/mapr/conf/env.sh"
+   clush $parg "echo 'MapR Env Settings'; grep ^export /opt/mapr/conf/env.sh"
    echo "$sep"
    if [[ "$mrv" == "1" ]] ; then # MRv1
-      clush "$parg" "echo 'Mapred-site.xml Checksum Consistency'; \
+      clush $parg "echo 'Mapred-site.xml Checksum Consistency'; \
                    sum /opt/mapr/hadoop/hadoop-0.20.2/conf/mapred-site.xml"
    echo "$sep"
-      clush "$parg" "echo 'core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-0.20.2/conf/core-site.xml"; echo "$sep"
-      clush "$parg" "echo 'MapR Central Logging Setting'; grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh"; echo "$sep"
+      clush $parg "echo 'core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-0.20.2/conf/core-site.xml"; echo "$sep"
+      clush $parg "echo 'MapR Central Logging Setting'; grep ROOT_LOGGER /opt/mapr/hadoop/hadoop-0.20.2/conf/hadoop-env.sh"; echo "$sep"
    else
-      clush "$parg" "echo 'MR2 core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"; echo "$sep"
-      clush "$parg" "echo 'MR2 core-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"; echo "$sep"
-      clush "$parg" "echo 'MR2 mapred-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/mapred-site.xml"; echo "$sep"
-      clush "$parg" "echo 'MR2 mapred-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/mapred-site.xml"; echo "$sep"
-      clush "$parg" "echo 'MR2 yarn-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/yarn-site.xml"; echo "$sep"
-      clush "$parg" "echo 'MR2 yarn-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/yarn-site.xml"; echo "$sep"
+      clush $parg "echo 'MR2 core-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"; echo "$sep"
+      clush $parg "echo 'MR2 core-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"; echo "$sep"
+      clush $parg "echo 'MR2 mapred-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/mapred-site.xml"; echo "$sep"
+      clush $parg "echo 'MR2 mapred-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/mapred-site.xml"; echo "$sep"
+      clush $parg "echo 'MR2 yarn-site.xml Checksum Consistency'; sum /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/yarn-site.xml"; echo "$sep"
+      clush $parg "echo 'MR2 yarn-site.xml Property Count: '; awk '/<prop/,/<\/prop/ {if (/\/prop/) count++}; END {print count}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/yarn-site.xml"; echo "$sep"
       hadoop conf-details print-all-effective-properties |grep central-logging
    fi
 
    msg="MapR Central Configuration Setting"
-   clush "$parg" "echo $msg; grep centralconfig /opt/mapr/conf/warden.conf"
+   clush $parg "echo $msg; grep centralconfig /opt/mapr/conf/warden.conf"
    echo "$sep"
-   clush "$parg" "echo 'MapR Roles Per Host'; ls /opt/mapr/roles"; echo "$sep"
+   clush $parg "echo 'MapR Roles Per Host'; ls /opt/mapr/roles"; echo "$sep"
    #cmd="find /opt/mapr -maxdepth 1 -type d |sort"
-   #clush "$parg" "echo 'MapR Directories'; $cmd"; echo "$sep"
+   #clush $parg "echo 'MapR Directories'; $cmd"; echo "$sep"
    # Strip -mapr-xxxx version from all jar file names and sort for dups
    cmd="find /opt/mapr -name '*mapr-[0-9]*.jar' |sed 's/-mapr-[0-9]*//' |uniq -d"
-   clush "$parg" "echo 'Duplicate jars'; $cmd"; echo "$sep"
+   clush $parg "echo 'Duplicate jars'; $cmd"; echo "$sep"
    echo
    #if (type -p jq >/dev/null); then
    #TBD: get history server hostname/ip, get 1-3 days history and log it.
@@ -189,11 +189,11 @@ cluster_checks2() {
 
 edgenode_checks() {
    msg="Edge Node Checking "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   clush "$parg" 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'
+   clush $parg 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'
    echo "$sep"
 
    msg="Checking for MySQL Server "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
-   clush "$parg" ${SUDO:-} "service mysqld status 2>/dev/null"
+   clush $parg ${SUDO:-} "service mysqld status 2>/dev/null"
    echo "$sep"
 
    #TBD: Check Hive config
@@ -202,7 +202,7 @@ edgenode_checks() {
    msg="Checking Hive Configuration "; printf "%s%s \n" "$msg" "${sep:${#msg}}"
    clcmd="sed '/<!--.*-->/d' /opt/mapr/hive/hive-2.1/conf/hive-site.xml \
          |sed '/<!--/,/-->/d' |grep '<name>'"
-   clush "$parg" ${SUDO:-} "$clcmd"
+   clush $parg ${SUDO:-} "$clcmd"
    echo "$sep"
 
    #TBD: Check Hue port and config (hue.ini)
@@ -216,10 +216,10 @@ cluster_checks3() {
    msg="Verbose audits "; printf "%s%s \n" "$msg" "${sep:${#msg}}"; echo
    #$node maprcli dump balancerinfo | sort | awk '$1 == prvkey {size += $9}; $1 != prvkey {if (prvkey!="") print size; prvkey=$1; size=$9}'
    #echo MapR disk list per host
-   clush "$parg" 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'; echo "$sep"
-   clush "$parg" 'echo "MapR Disk List per Host"; maprcli disk list -output terse -system 0 -host $(hostname)'; echo "$sep"
-   clush "$parg" 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'; echo "$sep"
-   #clush "$parg" 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list '; echo "$sep"
+   clush $parg 'echo "MapR packages installed"; rpm -qa |grep mapr- |sort'; echo "$sep"
+   clush $parg 'echo "MapR Disk List per Host"; maprcli disk list -output terse -system 0 -host $(hostname)'; echo "$sep"
+   clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list | grep -A4 StripeDepth'; echo "$sep"
+   #clush $parg 'echo "MapR Disk Stripe Depth"; ${SUDO:-} /opt/mapr/server/mrconfig dg list '; echo "$sep"
    msg="MapR Complete Volume List "; printf "%s%s \n" "$msg" "${sep:${#msg}}" 
    ${node:-} maprcli volume list -columns n,numreplicas,mountdir,used,numcontainers,logicalUsed; echo "$sep"
    msg="MapR Storage Pool Details "; printf "%s%s \n" "$msg" "${sep:${#msg}}" 
@@ -238,7 +238,7 @@ cluster_checks3() {
    # TBD: check all hadoop* packages installed
    clush -b -g zk -g cldb "echo 'ZK and CLDB nice values'; ps -ocomm,pid,nice $(</opt/mapr/zkdata/zookeeper_server.pid) $(</opt/mapr/pid/cldb.pid)"
    echo "$sep"
-   clush "$parg" "echo 'Guts 6sec snapshot'; /opt/mapr/bin/guts cpu:none rpc:none cache:none db:none cleaner:none time:all dsec:6"; echo "$sep"
+   clush $parg "echo 'Guts 6sec snapshot'; /opt/mapr/bin/guts cpu:none rpc:none cache:none db:none cleaner:none time:all dsec:6"; echo "$sep"
    [[ -n "$dbg" ]] && set +x
 }
 
@@ -246,19 +246,19 @@ security_checks() {
    msg="MapR Security Checks "; printf "\n%s%s \n\n" "$msg" "${sep:${#msg}}"
 
    # Edge or Cluster nodes (Linux checks)
-   clush "$parg" "echo -n 'SElinux status: '; ([[ -d /etc/selinux && -f /etc/selinux/config ]] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo
-   clush "$parg" "echo Permissions on /etc/nsswitch.conf; stat -c '%U %G %A %a %n' /etc/nsswitch.conf"
-   clush "$parg" 'echo nsswitch.conf settings; grep -v -e ^# -e ^$ /etc/nsswitch.conf'; echo
-   clush "$parg" "echo Permissions on /tmp; stat -c '%U %G %A %a %n' /tmp"
-   clush "$parg" ${SUDO:-} "service ntpd status|sed 's/(.*)//'"; echo
-   clush "$parg" ${SUDO:-} 'service sssd status|sed "s/(.*)//"; chkconfig --list sssd | grep -e 3:on -e 5:on >/dev/null && wc /etc/sssd/sssd.conf' #TBD: Check sssd settings
-   clush "$parg" ${SUDO:-} "service krb5kbc status |sed 's/(.*)//'; service kadmin status |sed 's/(.*)//'" # Check for Kerberos
-   clush "$parg" ${SUDO:-} "echo Checking for Firewall; service iptables status |sed 's/(.*)//'"
-   clush "$parg" ${SUDO:-} 'echo Checking for LUKS; grep -v -e ^# -e ^$ /etc/crypttab'
-   clush "$parg" ${SUDO:-} 'echo Checking for C and Java Compilers; type gcc; type javac; find /usr/lib -name javac|sort'
-   #TBD: clush "$parg" ${SUDO:-} 'echo Checking MySQL; type mysql && mysql -u root -e "show databases" && echo "Passwordless MySQL access"'
-   clush "$parg" 'echo Checking for Internet Access; { curl -f http://mapr.com/ >/dev/null 2>&1 || curl -f http://54.245.106.105/; } && echo Internet Access Available || echo Internet Access Unavailable'
-   clush "$parg" "echo Checking All TCP/UDP connections; netstat -t -u -p -e --numeric-ports"
+   clush $parg "echo -n 'SElinux status: '; ([[ -d /etc/selinux && -f /etc/selinux/config ]] && grep ^SELINUX= /etc/selinux/config) || echo Disabled"; echo
+   clush $parg "echo Permissions on /etc/nsswitch.conf; stat -c '%U %G %A %a %n' /etc/nsswitch.conf"
+   clush $parg 'echo nsswitch.conf settings; grep -v -e ^# -e ^$ /etc/nsswitch.conf'; echo
+   clush $parg "echo Permissions on /tmp; stat -c '%U %G %A %a %n' /tmp"
+   clush $parg ${SUDO:-} "service ntpd status|sed 's/(.*)//'"; echo
+   clush $parg ${SUDO:-} 'service sssd status|sed "s/(.*)//"; chkconfig --list sssd | grep -e 3:on -e 5:on >/dev/null && wc /etc/sssd/sssd.conf' #TBD: Check sssd settings
+   clush $parg ${SUDO:-} "service krb5kbc status |sed 's/(.*)//'; service kadmin status |sed 's/(.*)//'" # Check for Kerberos
+   clush $parg ${SUDO:-} "echo Checking for Firewall; service iptables status |sed 's/(.*)//'"
+   clush $parg ${SUDO:-} 'echo Checking for LUKS; grep -v -e ^# -e ^$ /etc/crypttab'
+   clush $parg ${SUDO:-} 'echo Checking for C and Java Compilers; type gcc; type javac; find /usr/lib -name javac|sort'
+   #TBD: clush $parg ${SUDO:-} 'echo Checking MySQL; type mysql && mysql -u root -e "show databases" && echo "Passwordless MySQL access"'
+   clush $parg 'echo Checking for Internet Access; { curl -f http://mapr.com/ >/dev/null 2>&1 || curl -f http://54.245.106.105/; } && echo Internet Access Available || echo Internet Access Unavailable'
+   clush $parg "echo Checking All TCP/UDP connections; netstat -t -u -p -e --numeric-ports"
 
    # Cluster nodes only
    if [[ "$edge" == "false" ]]; then
@@ -272,38 +272,38 @@ security_checks() {
       msg="MapR Cluster Admin ACLs"; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} maprcli acl show -type cluster
       # Check for MapR whitelist: http://doc.mapr.com/display/MapR/Configuring+MapR+Security#ConfiguringMapRSecurity-whitelist
-      clush "$parg" "echo 'MapR MFS Whitelist Defined'; grep mfs.subnets.whitelist /opt/mapr/conf/mfs.conf"
-      clush "$parg" "echo 'MapR YARN Submit ACLs'; awk '/<queue/,/<\/queue>/ {if (/acl|<queue /&&!/<!--/) print}' /opt/mapr/hadoop/hadoop-2*/etc/hadoop/fair-scheduler.xml"
+      clush $parg "echo 'MapR MFS Whitelist Defined'; grep mfs.subnets.whitelist /opt/mapr/conf/mfs.conf"
+      clush $parg "echo 'MapR YARN Submit ACLs'; awk '/<queue/,/<\/queue>/ {if (/acl|<queue /&&!/<!--/) print}' /opt/mapr/hadoop/hadoop-2*/etc/hadoop/fair-scheduler.xml"
       msg="YARN Queue ACLs"; printf "%s%s \n" "$msg" "${sep:${#msg}}"
       ${node:-} mapred queue -showacls
       grep -q ^zk: /etc/clustershell/groups && garg="-g zk"
-      clush "$parg" ${garg:-} "echo Checking Zookeeper Secure Mode; grep -i ^auth /opt/mapr/zookeeper/zookeeper-*/conf/zoo.cfg"
+      clush $parg ${garg:-} "echo Checking Zookeeper Secure Mode; grep -i ^auth /opt/mapr/zookeeper/zookeeper-*/conf/zoo.cfg"
    fi
    # Edge or Cluster nodes
-   clush "$parg" ${SUDO:-} "service mapr-nfsserver status|sed 's/(.*)//'"
+   clush $parg ${SUDO:-} "service mapr-nfsserver status|sed 's/(.*)//'"
    # NFS Exports should be limited to subnet(s) (whitelist) and squash all root access
-   clush "$parg" ${SUDO:-} 'echo Checking NFS Exports; grep -v -e ^# -e ^$ /opt/mapr/conf/exports /etc/exports'
-   clush "$parg" ${SUDO:-} "echo Checking Current NFS Exports; showmount -e | sed -n '2,\$p'"
-   clush "$parg" ${SUDO:-} "echo Checking Active NFS Mounts; showmount -a | sed -n '2,\$p'"; echo "$sep"
-   clush "$parg" "echo Ownership of /opt/mapr Must Be root; stat -c '%U %G %A %a %n' /opt/mapr"
-   clush "$parg" ${SUDO:-} "echo Find Setuid Executables in /opt/mapr;  find /opt/mapr -type f \( -perm -4100 -o -perm -2010 \) -exec stat -c '%U %G %A %a %n' {} \; |sort"
-   #clush "$parg" ${SUDO:-} "echo Find Setuid Executables in /opt/mapr; find /opt/mapr -perm +6000 -type f -exec stat -c '%U %G %A %a %n' {} \; |sort"
-   clush "$parg" "awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf" # Check MapR JPAM settings
-   clush "$parg" "echo CheckSum of /etc/pam.d files; awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf | awk -F= '/serviceName/{print \$2}' |tr -d \\042  | xargs -i sh -c 'echo -n -e /etc/pam.d/{} \\\t; sum /etc/pam.d/{}'"
-   clush "$parg" "echo 'HiveServer2 Impersonation'; ls /opt/mapr/roles |grep -q hiveserver2 && awk '/<prop/,/<\/prop/ {if (/enable.doAs/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo HiveServer2 not installed"
-   clush "$parg" "echo 'Hive MetaStore Impersonation'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop/ {if (/setugi/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo Hive MetaStore not installed"
-   clush "$parg" "echo 'Hive MetaStore Password'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop/ {if (/javax.jdo.option.ConnectionPassword/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml"
-   clush "$parg" "echo 'Hadoop Proxy Users'; awk '/<prop/,/<\/prop/ {if (/proxyuser/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"
-   clush "$parg" "echo 'MapR Proxy Users'; ls /opt/mapr/conf/proxy"
-   clush "$parg" "echo 'Drill Impersonation'; ls /opt/mapr/roles |grep -q drill && awk '/impersonation/,/}/ {if (/enabled:/) print}' /opt/mapr/drill/drill-1.*/conf/drill-override.conf || echo Drill not installed"
-   clush "$parg" "echo 'Oozie Proxy Settings '; ls /opt/mapr/roles |grep -q oozie && awk '/<prop/,/<\/prop/ {if (/ProxyUserService/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/oozie/oozie-*/conf/oozie-site.xml || echo Oozie not installed"
+   clush $parg ${SUDO:-} 'echo Checking NFS Exports; grep -v -e ^# -e ^$ /opt/mapr/conf/exports /etc/exports'
+   clush $parg ${SUDO:-} "echo Checking Current NFS Exports; showmount -e | sed -n '2,\$p'"
+   clush $parg ${SUDO:-} "echo Checking Active NFS Mounts; showmount -a | sed -n '2,\$p'"; echo "$sep"
+   clush $parg "echo Ownership of /opt/mapr Must Be root; stat -c '%U %G %A %a %n' /opt/mapr"
+   clush $parg ${SUDO:-} "echo Find Setuid Executables in /opt/mapr;  find /opt/mapr -type f \( -perm -4100 -o -perm -2010 \) -exec stat -c '%U %G %A %a %n' {} \; |sort"
+   #clush $parg ${SUDO:-} "echo Find Setuid Executables in /opt/mapr; find /opt/mapr -perm +6000 -type f -exec stat -c '%U %G %A %a %n' {} \; |sort"
+   clush $parg "awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf" # Check MapR JPAM settings
+   clush $parg "echo CheckSum of /etc/pam.d files; awk '/^jpamLogin/,/};/' /opt/mapr/conf/mapr.login.conf | awk -F= '/serviceName/{print \$2}' |tr -d \\042  | xargs -i sh -c 'echo -n -e /etc/pam.d/{} \\\t; sum /etc/pam.d/{}'"
+   clush $parg "echo 'HiveServer2 Impersonation'; ls /opt/mapr/roles |grep -q hiveserver2 && awk '/<prop/,/<\/prop/ {if (/enable.doAs/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo HiveServer2 not installed"
+   clush $parg "echo 'Hive MetaStore Impersonation'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop/ {if (/setugi/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml || echo Hive MetaStore not installed"
+   clush $parg "echo 'Hive MetaStore Password'; ls /opt/mapr/roles |grep -q metastore && awk '/<prop/,/<\/prop/ {if (/javax.jdo.option.ConnectionPassword/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hive/hive-*/conf/hive-site.xml"
+   clush $parg "echo 'Hadoop Proxy Users'; awk '/<prop/,/<\/prop/ {if (/proxyuser/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/hadoop/hadoop-2.*/etc/hadoop/core-site.xml"
+   clush $parg "echo 'MapR Proxy Users'; ls /opt/mapr/conf/proxy"
+   clush $parg "echo 'Drill Impersonation'; ls /opt/mapr/roles |grep -q drill && awk '/impersonation/,/}/ {if (/enabled:/) print}' /opt/mapr/drill/drill-1.*/conf/drill-override.conf || echo Drill not installed"
+   clush $parg "echo 'Oozie Proxy Settings '; ls /opt/mapr/roles |grep -q oozie && awk '/<prop/,/<\/prop/ {if (/ProxyUserService/) {print;f=1}; if (/value/&&f) {print;f=0}}' /opt/mapr/oozie/oozie-*/conf/oozie-site.xml || echo Oozie not installed"
    #TBD: Find Hue security settings
    echo
    #TBD: Check file permissions on files MapR embeds with passwords at install time, like /opt/mapr/hadoop/hadoop-0.20.2/conf/ssl-server.xml
    if [[ "$verbose" == "true" ]]; then
-      clush "$parg" 'echo Checking for Saved Passwords; find /opt/mapr -type f \( -iname \*.xml\* -o -iname \*.conf\* -o -iname \*.json\* \) -exec grep -Hi -m1 -A1 -e password -e jceks {} \;'
+      clush $parg 'echo Checking for Saved Passwords; find /opt/mapr -type f \( -iname \*.xml\* -o -iname \*.conf\* -o -iname \*.json\* \) -exec grep -Hi -m1 -A1 -e password -e jceks {} \;'
    else
-      clush "$parg" 'echo Checking for Saved Passwords; find /opt/mapr -regex "/opt/mapr/.*conf.old" -prune -o -regex "/opt/mapr/.*conf.new" -prune -o -regex "/opt/mapr/hadoop/hadoop-2.*/share" -prune -o -path /opt/mapr/hadoop/OLD_HADOOP_VERSIONS -prune -o -path /opt/mapr/tmp -o -type f \( -iname \*.xml\* -o -iname \*.conf\* -o -iname \*.json\* \) -exec grep -Hi -m1 -A1 -e password -e jceks {} \;'
+      clush $parg 'echo Checking for Saved Passwords; find /opt/mapr -regex "/opt/mapr/.*conf.old" -prune -o -regex "/opt/mapr/.*conf.new" -prune -o -regex "/opt/mapr/hadoop/hadoop-2.*/share" -prune -o -path /opt/mapr/hadoop/OLD_HADOOP_VERSIONS -prune -o -path /opt/mapr/tmp -o -type f \( -iname \*.xml\* -o -iname \*.conf\* -o -iname \*.json\* \) -exec grep -Hi -m1 -A1 -e password -e jceks {} \;'
    fi
    echo
 
@@ -342,7 +342,7 @@ fi
 if [[ $(nodeset -c @"${group:-all}") == 0 ]]; then
    echo group: "${group:-all}" does not exist; exit 2
 fi
-if ! clush "$parg" -S test -d /opt/mapr; then
+if ! clush $parg -S test -d /opt/mapr; then
    echo MapR not installed in node group "$group"; exit 3
 fi
 echo "$sep"

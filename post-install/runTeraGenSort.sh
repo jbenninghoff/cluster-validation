@@ -44,7 +44,7 @@ maps=$(( (bytes/chunksize) + (bytes % chunksize > 0) ))
 #find latest hadoop installed
 hdphome=$(find /opt/mapr/hadoop -maxdepth 1 -type d -name hadoop-\* \
          |sort -n |tail -1)
-hdpjar=$(find "$hdphome" -name hadoop-mapreduce-examples\*.jar)
+hdpjar=$(find "$hdphome" -name hadoop-mapreduce-examples\*[0-9].jar)
 #tbpath=/benchmarks/100tb                                                        
 
 #Run TeraGen
@@ -151,7 +151,7 @@ myd=$(date +'%Y/%m/%d')
 myj=$(grep 'INFO mapreduce.Job: Running job' terasort.tmp |awk '{print $7}')
 myhist="/var/mapr/cluster/yarn/rm/staging/history/done/$myd/00*/$myj*.jhist"
 until (hadoop fs -stat $myhist); do
- echo Waiting 9sec for "$myhist"; sleep 9
+  echo Waiting 20 sec for "$myhist"; sleep 20
 done
 myhist=$(hadoop fs -ls "$myhist" |awk '{print $NF}')                            
 #echo "HISTORY FILE: $myhist"
